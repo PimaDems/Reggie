@@ -191,7 +191,6 @@
             type="button"
             aria-expanded="false"
             aria-controls="optional-fields"
-            aria-label="Show more optional voter-registration details"
           >
             More… optional details
           </button>
@@ -286,10 +285,6 @@
         optionalFieldsForm.classList.toggle('hidden', !visible);
         toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
         toggleOptionalFieldsButton.textContent = visible ? 'Hide optional details' : 'More… optional details';
-        toggleOptionalFieldsButton.setAttribute(
-          'aria-label',
-          visible ? 'Hide optional voter-registration details' : 'Show more optional voter-registration details'
-        );
       }
 
       function resetOptionalFields() {
@@ -508,6 +503,9 @@
           ) {
             setIfTextField(field, parsed.zip);
           } else if (
+            (typeof field.check === 'function' ||
+              typeof field.uncheck === 'function' ||
+              typeof field.setText === 'function') &&
             matchesAnyFieldName(normalized, [
               'aevl',
               'activeearlyvotinglist',
@@ -519,13 +517,13 @@
             setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
           } else if (
             matchesAnyFieldName(normalized, [
-              'last4digitsofyourssn',
-              'last4digitsofssn',
-              'last4ssn',
-              'ssnlast4',
-              'ssnlastfour',
-              'socialsecuritylast4',
-              'socialsecuritynumberlast4',
+              /^last4digitsofyourssn$/,
+              /^last4digitsofssn$/,
+              /^last4ssn$/,
+              /^ssnlast4$/,
+              /^ssnlastfour$/,
+              /^socialsecuritylast4$/,
+              /^socialsecuritynumberlast4$/,
             ])
           ) {
             setIfTextField(field, parsed.ssnLastFour);
