@@ -121,11 +121,6 @@
         gap: 0.5rem;
       }
 
-      .field-help {
-        margin: 0.3rem 0 0 1.9rem;
-        color: #234;
-      }
-
       .checkbox-row input {
         margin-top: 0.15rem;
       }
@@ -220,11 +215,10 @@
           <h2 id="optional-fields-heading">Optional voter-registration details</h2>
           <div class="checkbox-row">
             <label>
-              <input id="optional-aevl" name="aevl" type="checkbox" aria-describedby="optional-aevl-help" />
-              AEVL (Active Early Voting List)
+              <input id="optional-aevl" name="aevl" type="checkbox" />
+              AEVL (Active Early Voting List) - Send my early ballot by Mail.
             </label>
           </div>
-          <p id="optional-aevl-help" class="field-help">Send my early ballot by Mail.</p>
           <div class="field-group">
             <label for="optional-ssn4">Last 4 digits of your SSN</label>
             <input
@@ -541,7 +535,7 @@
               /^.*mailballotrequest.*$/,
             ])
           ) {
-            setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : 'No');
+            setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
           } else if (
             matchesAnyFieldName(normalized, [
               /^last4digitsofyourssn$/,
