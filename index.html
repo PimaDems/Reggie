@@ -237,7 +237,7 @@
       function formatZipCode(rawZip) {
         const value = (rawZip || '').trim();
         if (/^\d{9}$/.test(value)) {
-          return `${value.slice(0, 5)} ${value.slice(5)}`;
+          return `${value.slice(0, 5)}-${value.slice(5)}`;
         }
 
         return value;
