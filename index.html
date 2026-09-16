@@ -248,7 +248,13 @@
         const dateOfBirth = parseAamvaDate(extractField(rawData, 'DBB'));
 
         const parsedName = fullName
-          ? fullName.split(',').map((part) => part.trim()).filter(Boolean).join(' ')
+          ? (() => {
+              const [daaLast, daaFirst, daaMiddle] = fullName
+                .split(',')
+                .map((part) => part.trim())
+                .filter(Boolean);
+              return [daaFirst, daaMiddle, daaLast].filter(Boolean).join(' ');
+            })()
           : [firstName, middleName, lastName].filter(Boolean).join(' ');
 
         const addressParts = [street, [city, state, zip].filter(Boolean).join(' ')].filter(Boolean);
@@ -282,72 +288,46 @@
 
       function fillPdfFormFields(form, parsed) {
         const fields = form.getFields();
-        const filledFields = [];
 
         for (const field of fields) {
           const normalized = normalizeFieldName(field.getName());
 
           if (normalized.includes('dateofbirth') || normalized === 'dob' || normalized.includes('birthdate')) {
-            if (setIfTextField(field, parsed.dateOfBirth)) filledFields.push(field);
+            setIfTextField(field, parsed.dateOfBirth);
           } else if (normalized.includes('firstname') || normalized === 'fname') {
-            if (setIfTextField(field, parsed.firstName)) filledFields.push(field);
+            setIfTextField(field, parsed.firstName);
           } else if (normalized.includes('middlename') || normalized === 'mname' || normalized === 'mi') {
-            if (setIfTextField(field, parsed.middleName)) filledFields.push(field);
+            setIfTextField(field, parsed.middleName);
           } else if (normalized.includes('lastname') || normalized === 'lname' || normalized.includes('surname')) {
-            if (setIfTextField(field, parsed.lastName)) filledFields.push(field);
-          } else if (normalized.includes('name')) {
-            if (setIfTextField(field, parsed.fullName)) filledFields.push(field);
+            setIfTextField(field, parsed.lastName);
+          } else if (
+            normalized === 'name' ||
+            normalized === 'fullname' ||
+            normalized.includes('applicantname') ||
+            normalized.includes('printname') ||
+            normalized.includes('legalname') ||
+            normalized.includes('votername')
+          ) {
+            setIfTextField(field, parsed.fullName);
           } else if (
             normalized.includes('residenceaddress') ||
             normalized.includes('streetaddress') ||
             normalized === 'address' ||
             normalized.includes('homeaddress')
           ) {
-            if (setIfTextField(field, parsed.street || parsed.fullAddress)) filledFields.push(field);
+            setIfTextField(field, parsed.street || parsed.fullAddress);
           } else if (normalized === 'city' || normalized.includes('residencecity')) {
-            if (setIfTextField(field, parsed.city)) filledFields.push(field);
+            setIfTextField(field, parsed.city);
           } else if (normalized === 'state' || normalized.includes('residencestate')) {
-            if (setIfTextField(field, parsed.state)) filledFields.push(field);
+            setIfTextField(field, parsed.state);
           } else if (
             normalized.includes('zip') ||
             normalized.includes('postalcode') ||
             normalized.includes('zipcode')
           ) {
-            if (setIfTextField(field, parsed.zip)) filledFields.push(field);
+            setIfTextField(field, parsed.zip);
           }
         }
-
-        return filledFields;
-      }
-
-      function resolveTargetPageIndex(pdfDocument, fields) {
-        const lastPageIndex = pdfDocument.getPageCount() - 1;
-        if (!fields.length) {
-          return lastPageIndex;
-        }
-
-        const pages = pdfDocument.getPages();
-        const indexes = new Set();
-
-        for (const field of fields) {
-          if (!field.acroField || typeof field.acroField.getWidgets !== 'function') {
-            continue;
-          }
-
-          for (const widget of field.acroField.getWidgets()) {
-            const pageRef = typeof widget.P === 'function' ? widget.P() : null;
-            const index = pages.findIndex((page) => page.ref === pageRef);
-            if (index >= 0) {
-              indexes.add(index);
-            }
-          }
-        }
-
-        if (!indexes.size) {
-          return lastPageIndex;
-        }
-
-        return indexes.has(lastPageIndex) ? lastPageIndex : Math.max(...indexes);
       }
 
       async function downloadLastPage(parsed) {
@@ -363,10 +343,10 @@
         }
         const form = sourcePdf.getForm();
 
-        const filledFields = fillPdfFormFields(form, parsed);
+        fillPdfFormFields(form, parsed);
         form.flatten();
 
-        const targetPageIndex = resolveTargetPageIndex(sourcePdf, filledFields);
+        const targetPageIndex = sourcePdf.getPageCount() - 1;
         const outputPdf = await PDFDocument.create();
         const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
         outputPdf.addPage(targetPage);
