@@ -45,6 +45,10 @@
         margin-top: 1rem;
       }
 
+      .toggle-actions {
+        margin-top: 1rem;
+      }
+
       button {
         font-size: 1rem;
         padding: 0.65rem 0.95rem;
@@ -58,6 +62,11 @@
       button.secondary {
         background: #fff;
         color: #1f3c88;
+      }
+
+      button.small {
+        font-size: 0.9rem;
+        padding: 0.45rem 0.75rem;
       }
 
       button:disabled {
@@ -90,6 +99,43 @@
       .status {
         color: #234;
         margin-top: 0.75rem;
+      }
+
+      .optional-form {
+        margin-top: 0.75rem;
+        padding: 1rem;
+        border: 1px solid #d7def2;
+        border-radius: 8px;
+        background: #f7f9ff;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+
+      .checkbox-row input {
+        margin-top: 0.15rem;
+      }
+
+      .field-group {
+        margin-top: 0.75rem;
+      }
+
+      .field-group label {
+        display: block;
+        margin-bottom: 0.3rem;
+        font-weight: bold;
+      }
+
+      .field-group input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid #aab7da;
+        border-radius: 8px;
+        font: inherit;
       }
 
       @media (max-width: 480px) {
@@ -138,6 +184,42 @@
         </dl>
         <p class="status hidden" id="print-status"></p>
         <p class="error hidden" id="print-error"></p>
+        <div class="toggle-actions">
+          <button
+            id="toggle-optional-fields"
+            class="secondary small"
+            type="button"
+            aria-expanded="false"
+            aria-controls="optional-fields"
+          >
+            more..
+          </button>
+        </div>
+        <form id="optional-fields" class="optional-form hidden">
+          <div class="checkbox-row">
+            <input id="optional-aevl" type="checkbox" />
+            <label for="optional-aevl">AEVL (Active Early Voting List) - Send my early ballot by Mail.</label>
+          </div>
+          <div class="field-group">
+            <label for="optional-ssn4">Last 4 digits of your SSN</label>
+            <input
+              id="optional-ssn4"
+              type="text"
+              inputmode="numeric"
+              maxlength="4"
+              pattern="[0-9]{4}"
+              autocomplete="off"
+            />
+          </div>
+          <div class="field-group">
+            <label for="optional-phone">Telephone Number</label>
+            <input id="optional-phone" type="tel" autocomplete="tel" />
+          </div>
+          <div class="field-group">
+            <label for="optional-email">E-Mail</label>
+            <input id="optional-email" type="email" autocomplete="email" />
+          </div>
+        </form>
         <div class="actions">
           <button id="cancel-result" class="secondary">Cancel</button>
           <button id="print-btn">Print</button>
@@ -159,6 +241,7 @@
       const cancelScanButton = document.getElementById('cancel-scan');
       const cancelResultButton = document.getElementById('cancel-result');
       const printButton = document.getElementById('print-btn');
+      const toggleOptionalFieldsButton = document.getElementById('toggle-optional-fields');
 
       const video = document.getElementById('video');
       const scanStatus = document.getElementById('scan-status');
@@ -170,6 +253,11 @@
 
       const printStatus = document.getElementById('print-status');
       const printError = document.getElementById('print-error');
+      const optionalFieldsForm = document.getElementById('optional-fields');
+      const optionalAevl = document.getElementById('optional-aevl');
+      const optionalSsn4 = document.getElementById('optional-ssn4');
+      const optionalPhone = document.getElementById('optional-phone');
+      const optionalEmail = document.getElementById('optional-email');
 
       const codeReader = new BrowserMultiFormatReader();
       let controls = null;
@@ -191,6 +279,19 @@
         node.classList.add('hidden');
       }
 
+      function setOptionalFieldsVisible(visible) {
+        optionalFieldsForm.classList.toggle('hidden', !visible);
+        toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
+      }
+
+      function resetOptionalFields() {
+        optionalAevl.checked = false;
+        optionalSsn4.value = '';
+        optionalPhone.value = '';
+        optionalEmail.value = '';
+        setOptionalFieldsVisible(false);
+      }
+
       function resetToStart() {
         if (controls) {
           controls.stop();
@@ -202,6 +303,7 @@
         hideMessage(scanError);
         hideMessage(printError);
         hideMessage(printStatus);
+        resetOptionalFields();
         scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
       }
 
@@ -297,6 +399,30 @@
         return true;
       }
 
+      function setIfCheckboxField(field, checked) {
+        if (!checked || typeof field.check !== 'function') {
+          return false;
+        }
+
+        field.check();
+        return true;
+      }
+
+      function matchesAnyFieldName(normalized, variants) {
+        return variants.some((variant) =>
+          variant instanceof RegExp ? variant.test(normalized) : normalized.includes(variant)
+        );
+      }
+
+      function getOptionalRegistrationData() {
+        return {
+          aevl: optionalAevl.checked,
+          ssnLastFour: optionalSsn4.value.replace(/\D/g, '').slice(0, 4),
+          telephone: optionalPhone.value.trim(),
+          email: optionalEmail.value.trim(),
+        };
+      }
+
       function isTransientDecodeError(error) {
         if (!error) {
           return false;
@@ -368,6 +494,34 @@
             normalized.includes('zipcode')
           ) {
             setIfTextField(field, parsed.zip);
+          } else if (
+            matchesAnyFieldName(normalized, [
+              'aevl',
+              'activeearlyvotinglist',
+              'earlyvotinglist',
+              'earlyballotbymail',
+              'sendmyearlyballotbymail',
+            ])
+          ) {
+            setIfCheckboxField(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
+          } else if (
+            matchesAnyFieldName(normalized, [
+              'last4digitsofyourssn',
+              'last4digitsofssn',
+              'last4ssn',
+              'ssnlast4',
+              'ssnlastfour',
+              'socialsecuritylast4',
+              'socialsecuritynumberlast4',
+            ])
+          ) {
+            setIfTextField(field, parsed.ssnLastFour);
+          } else if (
+            matchesAnyFieldName(normalized, ['telephone', 'phonenumber', 'phone', 'daytimephone'])
+          ) {
+            setIfTextField(field, parsed.telephone);
+          } else if (matchesAnyFieldName(normalized, ['email', 'emailaddress', 'eaddress'])) {
+            setIfTextField(field, parsed.email);
           }
         }
       }
@@ -487,6 +641,12 @@
       startScanButton.addEventListener('click', startScan);
       cancelScanButton.addEventListener('click', resetToStart);
       cancelResultButton.addEventListener('click', resetToStart);
+      toggleOptionalFieldsButton.addEventListener('click', () => {
+        setOptionalFieldsVisible(optionalFieldsForm.classList.contains('hidden'));
+      });
+      optionalSsn4.addEventListener('input', () => {
+        optionalSsn4.value = optionalSsn4.value.replace(/\D/g, '').slice(0, 4);
+      });
 
       printButton.addEventListener('click', async () => {
         if (!parsedLicenseData) {
@@ -499,7 +659,10 @@
         showMessage(printStatus, 'Generating pre-filled PDF...');
 
         try {
-          await downloadLastPage(parsedLicenseData);
+          await downloadLastPage({
+            ...parsedLicenseData,
+            ...getOptionalRegistrationData(),
+          });
           showMessage(printStatus, 'Download ready. Use your local printer to print the file.');
         } catch (error) {
           hideMessage(printStatus);
