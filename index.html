@@ -149,8 +149,7 @@
       import { BrowserMultiFormatReader, BarcodeFormat } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
       import { PDFDocument } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
 
-      const PDF_URL =
-        'https://azsos.gov/sites/default/files/docs/AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf';
+      const PDF_URL = './AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf';
 
       const startSection = document.getElementById('start-section');
       const scanSection = document.getElementById('scan-section');
@@ -348,7 +347,10 @@
         link.download = 'AZ-Voter-Registration-Last-Page.pdf';
         link.click();
 
-        URL.revokeObjectURL(url);
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          link.remove();
+        }, 1000);
       }
 
       async function startScan() {
@@ -386,7 +388,8 @@
                 hideMessage(printStatus);
                 showSection(resultSection);
               } else if (error && !String(error).includes('NotFoundException')) {
-                scanStatus.textContent = 'Scanning… hold still while we decode.';
+                showMessage(scanError, `Scanner error: ${error.message || String(error)}`);
+                scanStatus.textContent = 'Scanning paused. Reposition barcode and try again.';
               }
             },
             {

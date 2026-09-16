@@ -6,6 +6,14 @@ Static web app that:
 2. Parses and displays Name, Date of Birth, and Address.
 3. Lets the user cancel or generate a pre-filled PDF download containing only the last page of the Arizona voter registration form.
 
+## Form PDF file
+
+Place a trusted local copy of the form PDF at:
+
+`/home/runner/work/AZVoteReg/AZVoteReg/AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf`
+
+The app reads this local file to avoid runtime dependency on an externally hosted PDF.
+
 ## Run locally
 
 From the repository root:
