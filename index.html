@@ -518,12 +518,37 @@
       }
 
       function getOptionalRegistrationData() {
-        return {
-          aevl: optionalAevl.checked,
-          ssnLastFour: optionalSsn4.value.replace(/\D/g, '').slice(0, 4),
-          telephone: optionalPhone.value.trim(),
-          email: optionalEmail.value.trim(),
+         return {
+           aevl: optionalAevl.checked,
+           ssnLastFour: optionalSsn4.value.replace(/\D/g, '').slice(0, 4),
+           telephone: formatPhoneNumber(optionalPhone.value),
+           email: optionalEmail.value.trim(),
         };
+      }
+
+      function isValidUsPhoneDigits(digits) {
+        return /^\d{10}$/.test(digits);
+      }
+
+      function formatPhoneNumber(rawPhone) {
+        const digits = (rawPhone || '').replace(/\D/g, '');
+        if (!digits) {
+          return '';
+        }
+        // Allow an optional leading "1" country code.
+        const tenDigits = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+        if (!isValidUsPhoneDigits(tenDigits)) {
+          return rawPhone.trim();
+        }
+        return `${tenDigits.slice(0, 3)}-${tenDigits.slice(3, 6)}-${tenDigits.slice(6)}`;
+      }
+
+      function isValidEmail(rawEmail) {
+        const value = (rawEmail || '').trim();
+        if (!value) {
+          return true; // optional field, empty is fine
+        }
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
       }
 
       function isTransientDecodeError(error) {
