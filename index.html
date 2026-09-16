@@ -216,7 +216,7 @@
           <div class="checkbox-row">
             <label>
               <input id="optional-aevl" name="aevl" type="checkbox" />
-              AEVL (Active Early Voting List) - Send my early ballot by Mail.
+              AEVL (Active Early Voting List). Send my early ballot by Mail.
             </label>
           </div>
           <div class="field-group">
@@ -558,6 +558,7 @@
               /^contactphone$/,
               /^contactphonenumber$/,
               /^contacttelephone$/,
+              /^contacttelephonenumber$/,
             ])
           ) {
             setIfTextField(field, parsed.telephone);
