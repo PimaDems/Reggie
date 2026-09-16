@@ -273,10 +273,11 @@
 
       function setIfTextField(field, value) {
         if (!value || typeof field.setText !== 'function') {
-          return;
+          return false;
         }
 
         field.setText(value);
+        return true;
       }
 
       function fillPdfFormFields(form, parsed) {
@@ -287,41 +288,32 @@
           const normalized = normalizeFieldName(field.getName());
 
           if (normalized.includes('dateofbirth') || normalized === 'dob' || normalized.includes('birthdate')) {
-            setIfTextField(field, parsed.dateOfBirth);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.dateOfBirth)) filledFields.push(field);
           } else if (normalized.includes('firstname') || normalized === 'fname') {
-            setIfTextField(field, parsed.firstName);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.firstName)) filledFields.push(field);
           } else if (normalized.includes('middlename') || normalized === 'mname' || normalized === 'mi') {
-            setIfTextField(field, parsed.middleName);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.middleName)) filledFields.push(field);
           } else if (normalized.includes('lastname') || normalized === 'lname' || normalized.includes('surname')) {
-            setIfTextField(field, parsed.lastName);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.lastName)) filledFields.push(field);
           } else if (normalized.includes('name')) {
-            setIfTextField(field, parsed.fullName);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.fullName)) filledFields.push(field);
           } else if (
             normalized.includes('residenceaddress') ||
             normalized.includes('streetaddress') ||
             normalized === 'address' ||
             normalized.includes('homeaddress')
           ) {
-            setIfTextField(field, parsed.street || parsed.fullAddress);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.street || parsed.fullAddress)) filledFields.push(field);
           } else if (normalized === 'city' || normalized.includes('residencecity')) {
-            setIfTextField(field, parsed.city);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.city)) filledFields.push(field);
           } else if (normalized === 'state' || normalized.includes('residencestate')) {
-            setIfTextField(field, parsed.state);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.state)) filledFields.push(field);
           } else if (
             normalized.includes('zip') ||
             normalized.includes('postalcode') ||
             normalized.includes('zipcode')
           ) {
-            setIfTextField(field, parsed.zip);
-            filledFields.push(field);
+            if (setIfTextField(field, parsed.zip)) filledFields.push(field);
           }
         }
 
@@ -413,10 +405,10 @@
               if (result && result.getBarcodeFormat() === BarcodeFormat.PDF_417) {
                 const data = parseLicenseData(result.getText());
 
-                if (!data.fullName || !data.dateOfBirth || !data.fullAddress) {
+                if (!data.fullName || !data.dateOfBirth || !data.street) {
                   showMessage(
                     scanError,
-                    'Barcode scanned, but expected name/date-of-birth/address fields were not found.'
+                    'Barcode scanned, but expected name, date-of-birth, and street address fields were not found.'
                   );
                   scanStatus.textContent = 'Decoded data is incomplete. Keep scanning or cancel and retry.';
                   return;
