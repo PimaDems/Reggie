@@ -345,12 +345,13 @@
         const link = document.createElement('a');
         link.href = url;
         link.download = 'AZ-Voter-Registration-Last-Page.pdf';
+        document.body.appendChild(link);
         link.click();
 
         setTimeout(() => {
           URL.revokeObjectURL(url);
           link.remove();
-        }, 1000);
+        }, 60000);
       }
 
       async function startScan() {
