@@ -8,9 +8,9 @@ Static web app that:
 
 ## Form PDF file
 
-Place a trusted local copy of the form PDF at:
+Place a trusted local copy of the form PDF in the repository root (next to `index.html`) as:
 
-`/home/runner/work/AZVoteReg/AZVoteReg/AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf`
+`AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf`
 
 The app reads this local file to avoid runtime dependency on an externally hosted PDF.
 
