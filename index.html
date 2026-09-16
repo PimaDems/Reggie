@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AZ Voter Registration Helper</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 1rem;
+        background: #f7f7fb;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: 10px;
+        padding: 1.25rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+        font-size: 1.5rem;
+      }
+
+      p {
+        line-height: 1.4;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+      }
+
+      button {
+        font-size: 1rem;
+        padding: 0.65rem 0.95rem;
+        border-radius: 8px;
+        border: 1px solid #1f3c88;
+        background: #1f3c88;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #fff;
+        color: #1f3c88;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      video {
+        width: 100%;
+        max-height: 360px;
+        border-radius: 8px;
+        background: #222;
+      }
+
+      dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.5rem 1rem;
+      }
+
+      dt {
+        font-weight: bold;
+      }
+
+      .error {
+        color: #b10020;
+        margin-top: 0.75rem;
+      }
+
+      .status {
+        color: #234;
+        margin-top: 0.75rem;
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 1rem;
+        }
+
+        h1 {
+          font-size: 1.25rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section id="start-section">
+        <h1>Arizona Voter Registration Helper</h1>
+        <p>
+          Scan the <strong>back</strong> of an Arizona Driver License, verify the decoded information,
+          then print the last page of the Arizona voter registration form.
+        </p>
+        <div class="actions">
+          <button id="start-scan">Scan Driver License</button>
+        </div>
+      </section>
+
+      <section id="scan-section" class="hidden">
+        <h1>Scan License Barcode</h1>
+        <video id="video" playsinline autoplay muted></video>
+        <p class="status" id="scan-status">Point your camera at the PDF417 barcode.</p>
+        <p class="error hidden" id="scan-error"></p>
+        <div class="actions">
+          <button id="cancel-scan" class="secondary">Cancel</button>
+        </div>
+      </section>
+
+      <section id="result-section" class="hidden">
+        <h1>Confirm Decoded Information</h1>
+        <dl>
+          <dt>Name</dt>
+          <dd id="result-name"></dd>
+          <dt>Date of Birth</dt>
+          <dd id="result-dob"></dd>
+          <dt>Address</dt>
+          <dd id="result-address"></dd>
+        </dl>
+        <p class="status hidden" id="print-status"></p>
+        <p class="error hidden" id="print-error"></p>
+        <div class="actions">
+          <button id="cancel-result" class="secondary">Cancel</button>
+          <button id="print-btn">Print</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { BrowserMultiFormatReader, BarcodeFormat } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
+      import { PDFDocument } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
+
+      const PDF_URL =
+        'https://azsos.gov/sites/default/files/docs/AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf';
+
+      const startSection = document.getElementById('start-section');
+      const scanSection = document.getElementById('scan-section');
+      const resultSection = document.getElementById('result-section');
+
+      const startScanButton = document.getElementById('start-scan');
+      const cancelScanButton = document.getElementById('cancel-scan');
+      const cancelResultButton = document.getElementById('cancel-result');
+      const printButton = document.getElementById('print-btn');
+
+      const video = document.getElementById('video');
+      const scanStatus = document.getElementById('scan-status');
+      const scanError = document.getElementById('scan-error');
+
+      const resultName = document.getElementById('result-name');
+      const resultDob = document.getElementById('result-dob');
+      const resultAddress = document.getElementById('result-address');
+
+      const printStatus = document.getElementById('print-status');
+      const printError = document.getElementById('print-error');
+
+      const codeReader = new BrowserMultiFormatReader();
+      let controls = null;
+      let parsedLicenseData = null;
+
+      function showSection(section) {
+        for (const node of [startSection, scanSection, resultSection]) {
+          node.classList.toggle('hidden', node !== section);
+        }
+      }
+
+      function showMessage(node, message) {
+        node.textContent = message;
+        node.classList.remove('hidden');
+      }
+
+      function hideMessage(node) {
+        node.textContent = '';
+        node.classList.add('hidden');
+      }
+
+      function resetToStart() {
+        if (controls) {
+          controls.stop();
+          controls = null;
+        }
+
+        parsedLicenseData = null;
+        showSection(startSection);
+        hideMessage(scanError);
+        hideMessage(printError);
+        hideMessage(printStatus);
+        scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
+      }
+
+      function extractField(rawData, fieldCode) {
+        const escaped = fieldCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = rawData.match(new RegExp(`${escaped}([^\\r\\n]+)`));
+        return match ? match[1].trim() : '';
+      }
+
+      function parseAamvaDate(rawDate) {
+        const digits = (rawDate || '').replace(/\D/g, '');
+        if (digits.length !== 8) {
+          return rawDate || '';
+        }
+
+        let year;
+        let month;
+        let day;
+
+        if (Number(digits.slice(0, 4)) > 1900) {
+          year = digits.slice(0, 4);
+          month = digits.slice(4, 6);
+          day = digits.slice(6, 8);
+        } else {
+          month = digits.slice(0, 2);
+          day = digits.slice(2, 4);
+          year = digits.slice(4, 8);
+        }
+
+        return `${month}/${day}/${year}`;
+      }
+
+      function parseLicenseData(rawData) {
+        const fullName = extractField(rawData, 'DAA');
+        const firstName = extractField(rawData, 'DAC');
+        const middleName = extractField(rawData, 'DAD');
+        const lastName = extractField(rawData, 'DCS');
+
+        const street = extractField(rawData, 'DAG');
+        const city = extractField(rawData, 'DAI');
+        const state = extractField(rawData, 'DAJ');
+        const zip = extractField(rawData, 'DAK');
+
+        const dateOfBirth = parseAamvaDate(extractField(rawData, 'DBB'));
+
+        const parsedName = fullName
+          ? fullName.split(',').map((part) => part.trim()).filter(Boolean).join(' ')
+          : [firstName, middleName, lastName].filter(Boolean).join(' ');
+
+        const addressParts = [street, [city, state, zip].filter(Boolean).join(' ')].filter(Boolean);
+
+        return {
+          firstName,
+          middleName,
+          lastName,
+          fullName: parsedName,
+          dateOfBirth,
+          street,
+          city,
+          state,
+          zip,
+          fullAddress: addressParts.join(', '),
+        };
+      }
+
+      function normalizeFieldName(name) {
+        return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
+
+      function setIfTextField(field, value) {
+        if (!value || typeof field.setText !== 'function') {
+          return;
+        }
+
+        field.setText(value);
+      }
+
+      function fillPdfFormFields(form, parsed) {
+        const fields = form.getFields();
+
+        for (const field of fields) {
+          const normalized = normalizeFieldName(field.getName());
+
+          if (normalized.includes('dateofbirth') || normalized === 'dob' || normalized.includes('birthdate')) {
+            setIfTextField(field, parsed.dateOfBirth);
+          } else if (normalized.includes('firstname') || normalized === 'fname') {
+            setIfTextField(field, parsed.firstName);
+          } else if (normalized.includes('middlename') || normalized === 'mname' || normalized === 'mi') {
+            setIfTextField(field, parsed.middleName);
+          } else if (normalized.includes('lastname') || normalized === 'lname' || normalized.includes('surname')) {
+            setIfTextField(field, parsed.lastName);
+          } else if (normalized.includes('name')) {
+            setIfTextField(field, parsed.fullName);
+          } else if (
+            normalized.includes('residenceaddress') ||
+            normalized.includes('streetaddress') ||
+            normalized === 'address' ||
+            normalized.includes('homeaddress')
+          ) {
+            setIfTextField(field, parsed.street || parsed.fullAddress);
+          } else if (normalized === 'city' || normalized.includes('residencecity')) {
+            setIfTextField(field, parsed.city);
+          } else if (normalized === 'state' || normalized.includes('residencestate')) {
+            setIfTextField(field, parsed.state);
+          } else if (
+            normalized.includes('zip') ||
+            normalized.includes('postalcode') ||
+            normalized.includes('zipcode')
+          ) {
+            setIfTextField(field, parsed.zip);
+          }
+        }
+      }
+
+      async function downloadLastPage(parsed) {
+        const response = await fetch(PDF_URL);
+        if (!response.ok) {
+          throw new Error('Could not download the voter registration form PDF.');
+        }
+
+        const sourcePdfBytes = await response.arrayBuffer();
+        const sourcePdf = await PDFDocument.load(sourcePdfBytes);
+        const form = sourcePdf.getForm();
+
+        fillPdfFormFields(form, parsed);
+        form.flatten();
+
+        const lastPageIndex = sourcePdf.getPageCount() - 1;
+        if (lastPageIndex < 0) {
+          throw new Error('Downloaded PDF has no pages.');
+        }
+
+        const outputPdf = await PDFDocument.create();
+        const [lastPage] = await outputPdf.copyPages(sourcePdf, [lastPageIndex]);
+        outputPdf.addPage(lastPage);
+
+        const outputBytes = await outputPdf.save();
+        const blob = new Blob([outputBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'AZ-Voter-Registration-Last-Page.pdf';
+        link.click();
+
+        URL.revokeObjectURL(url);
+      }
+
+      async function startScan() {
+        showSection(scanSection);
+        hideMessage(scanError);
+        scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
+
+        try {
+          controls = await codeReader.decodeFromVideoDevice(
+            undefined,
+            video,
+            (result, error, activeControls) => {
+              controls = activeControls;
+
+              if (result && result.getBarcodeFormat() === BarcodeFormat.PDF_417) {
+                const data = parseLicenseData(result.getText());
+
+                if (!data.fullName || !data.dateOfBirth || !data.fullAddress) {
+                  showMessage(
+                    scanError,
+                    'Barcode scanned, but expected name/date-of-birth/address fields were not found.'
+                  );
+                  return;
+                }
+
+                parsedLicenseData = data;
+                controls.stop();
+                controls = null;
+
+                resultName.textContent = data.fullName;
+                resultDob.textContent = data.dateOfBirth;
+                resultAddress.textContent = data.fullAddress;
+
+                hideMessage(printError);
+                hideMessage(printStatus);
+                showSection(resultSection);
+              } else if (error && !String(error).includes('NotFoundException')) {
+                scanStatus.textContent = 'Scanning… hold still while we decode.';
+              }
+            },
+            {
+              formats: [BarcodeFormat.PDF_417],
+            }
+          );
+        } catch (error) {
+          showMessage(scanError, `Unable to start camera scanning: ${error.message || error}`);
+          scanStatus.textContent = 'Camera unavailable.';
+        }
+      }
+
+      startScanButton.addEventListener('click', startScan);
+      cancelScanButton.addEventListener('click', resetToStart);
+      cancelResultButton.addEventListener('click', resetToStart);
+
+      printButton.addEventListener('click', async () => {
+        if (!parsedLicenseData) {
+          showMessage(printError, 'Nothing to print. Please scan a license first.');
+          return;
+        }
+
+        printButton.disabled = true;
+        hideMessage(printError);
+        showMessage(printStatus, 'Generating pre-filled PDF...');
+
+        try {
+          await downloadLastPage(parsedLicenseData);
+          showMessage(printStatus, 'Download ready. Use your local printer to print the file.');
+        } catch (error) {
+          hideMessage(printStatus);
+          showMessage(printError, error.message || 'Unable to generate PDF.');
+        } finally {
+          printButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
