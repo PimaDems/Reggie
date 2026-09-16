@@ -366,16 +366,15 @@
 
         const sourcePdfBytes = await response.arrayBuffer();
         const sourcePdf = await PDFDocument.load(sourcePdfBytes);
+        if (sourcePdf.getPageCount() < 1) {
+          throw new Error('Downloaded PDF has no pages.');
+        }
         const form = sourcePdf.getForm();
 
         const filledFields = fillPdfFormFields(form, parsed);
         form.flatten();
 
         const targetPageIndex = resolveTargetPageIndex(sourcePdf, filledFields);
-        if (targetPageIndex < 0) {
-          throw new Error('Downloaded PDF has no pages.');
-        }
-
         const outputPdf = await PDFDocument.create();
         const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
         outputPdf.addPage(targetPage);
@@ -389,10 +388,10 @@
         link.download = 'AZ-Voter-Registration-Last-Page.pdf';
         document.body.appendChild(link);
         link.click();
+        link.remove();
 
         setTimeout(() => {
           URL.revokeObjectURL(url);
-          link.remove();
         }, 60000);
       }
 
