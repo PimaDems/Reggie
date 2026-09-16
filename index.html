@@ -290,12 +290,44 @@
         'This driver license is not from Arizona. Only Arizona driver licenses can be used with this form.';
       // pdf-lib coordinates are PDF points with origin (0,0) at the lower-left corner.
       // These Box 22 signature-line values were derived from inspecting page 3 (612x792) of the source PDF.
+      const HIGHLIGHT_STYLE = {
+        color: rgb(1, 1, 0),
+        opacity: 0.35,
+      };
       const BOX_22_SIGNATURE_HIGHLIGHT = {
         x: 74,
         y: 69,
         width: 236,
         height: 10,
-        opacity: 0.35,
+      };
+      // Prompt rectangles derived from page 3 text bounds in the source PDF
+      // (AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf, 612x792, lower-left origin).
+      const BOX_PROMPT_HIGHLIGHTS = [
+        {
+          label: '7 - Address where you get mail',
+          x: 22.25,
+          y: 491.37,
+          width: 112.38,
+          height: 10.0,
+        },
+        {
+          label: '14 - Party Preference',
+          x: 20.41,
+          y: 361.47,
+          width: 75.76,
+          height: 12.46,
+        },
+        {
+          label: '22 - Are you a citizen of the United States of America?',
+          x: 20.16,
+          y: 216.47,
+          width: 191.09,
+          height: 11.83,
+        },
+      ];
+      const BOX_22_PROMPT_SIGNATURE_LINE_HIGHLIGHT = {
+        label: '22 - Signature line',
+        ...BOX_22_SIGNATURE_HIGHLIGHT,
       };
 
       const codeReader = new BrowserMultiFormatReader();
@@ -711,15 +743,25 @@
           .slice(0, 40);
       }
 
-      function highlightSignatureLine(page) {
+      function drawYellowHighlight(page, rectangle) {
         page.drawRectangle({
-          x: BOX_22_SIGNATURE_HIGHLIGHT.x,
-          y: BOX_22_SIGNATURE_HIGHLIGHT.y,
-          width: BOX_22_SIGNATURE_HIGHLIGHT.width,
-          height: BOX_22_SIGNATURE_HIGHLIGHT.height,
-          color: rgb(1, 1, 0),
-          opacity: BOX_22_SIGNATURE_HIGHLIGHT.opacity,
+          x: rectangle.x,
+          y: rectangle.y,
+          width: rectangle.width,
+          height: rectangle.height,
+          color: HIGHLIGHT_STYLE.color,
+          opacity: HIGHLIGHT_STYLE.opacity,
         });
+      }
+
+      function highlightSignatureLine(page) {
+        drawYellowHighlight(page, BOX_22_PROMPT_SIGNATURE_LINE_HIGHLIGHT);
+      }
+
+      function highlightPromptText(page) {
+        for (const highlight of BOX_PROMPT_HIGHLIGHTS) {
+          drawYellowHighlight(page, highlight);
+        }
       }
 
       async function downloadLastPage(parsed) {
@@ -742,6 +784,7 @@
         const outputPdf = await PDFDocument.create();
         const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
         outputPdf.addPage(targetPage);
+        highlightPromptText(targetPage);
         highlightSignatureLine(targetPage);
 
         const outputBytes = await outputPdf.save();
