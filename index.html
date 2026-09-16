@@ -325,6 +325,29 @@
           height: 11.83,
         },
       ];
+      const EMPTY_FIELD_PROMPT_HIGHLIGHTS = {
+        ssnLastFour: {
+          label: '9 - Last 4 digits of your SSN',
+          x: 244.06,
+          y: 456.47,
+          width: 99.58,
+          height: 15.84,
+        },
+        telephone: {
+          label: '15 - Telephone Number',
+          x: 213.41,
+          y: 361.47,
+          width: 84.37,
+          height: 14.54,
+        },
+        email: {
+          label: '21 - E-Mail',
+          x: 406.72,
+          y: 261.47,
+          width: 39.98,
+          height: 14.54,
+        },
+      };
       const BOX_22_PROMPT_SIGNATURE_LINE_HIGHLIGHT = {
         label: '22 - Signature line',
         ...BOX_22_SIGNATURE_HIGHLIGHT,
@@ -758,8 +781,24 @@
         drawYellowHighlight(page, BOX_22_PROMPT_SIGNATURE_LINE_HIGHLIGHT);
       }
 
-      function highlightPromptText(page) {
-        for (const highlight of BOX_PROMPT_HIGHLIGHTS) {
+      function getPromptHighlights(parsed) {
+        const highlights = [...BOX_PROMPT_HIGHLIGHTS];
+
+        if (!parsed.ssnLastFour) {
+          highlights.push(EMPTY_FIELD_PROMPT_HIGHLIGHTS.ssnLastFour);
+        }
+        if (!parsed.telephone) {
+          highlights.push(EMPTY_FIELD_PROMPT_HIGHLIGHTS.telephone);
+        }
+        if (!parsed.email) {
+          highlights.push(EMPTY_FIELD_PROMPT_HIGHLIGHTS.email);
+        }
+
+        return highlights;
+      }
+
+      function highlightPromptText(page, promptHighlights = BOX_PROMPT_HIGHLIGHTS) {
+        for (const highlight of promptHighlights) {
           drawYellowHighlight(page, highlight);
         }
       }
@@ -784,7 +823,8 @@
         const outputPdf = await PDFDocument.create();
         const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
         outputPdf.addPage(targetPage);
-        highlightPromptText(targetPage);
+        const promptHighlights = getPromptHighlights(parsed);
+        highlightPromptText(targetPage, promptHighlights);
         highlightSignatureLine(targetPage);
 
         const outputBytes = await outputPdf.save();
