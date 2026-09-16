@@ -251,7 +251,7 @@
 
     <script type="module">
       import { BrowserMultiFormatReader, BarcodeFormat } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
-      import { PDFDocument } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
+      import { PDFDocument, rgb } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
 
       const PDF_URL = './AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf';
 
@@ -288,6 +288,15 @@
         'This person will not be 18 years old by November 3, 2026 and is not eligible to register to vote for this election.';
       const NON_ARIZONA_ERROR_MESSAGE =
         'This driver license is not from Arizona. Only Arizona driver licenses can be used with this form.';
+      // pdf-lib coordinates are PDF points with origin (0,0) at the lower-left corner.
+      // These Box 22 signature-line values were derived from inspecting page 3 (612x792) of the source PDF.
+      const BOX_22_SIGNATURE_HIGHLIGHT = {
+        x: 74,
+        y: 69,
+        width: 236,
+        height: 10,
+        opacity: 0.35,
+      };
 
       const codeReader = new BrowserMultiFormatReader();
       let controls = null;
@@ -702,6 +711,17 @@
           .slice(0, 40);
       }
 
+      function highlightSignatureLine(page) {
+        page.drawRectangle({
+          x: BOX_22_SIGNATURE_HIGHLIGHT.x,
+          y: BOX_22_SIGNATURE_HIGHLIGHT.y,
+          width: BOX_22_SIGNATURE_HIGHLIGHT.width,
+          height: BOX_22_SIGNATURE_HIGHLIGHT.height,
+          color: rgb(1, 1, 0),
+          opacity: BOX_22_SIGNATURE_HIGHLIGHT.opacity,
+        });
+      }
+
       async function downloadLastPage(parsed) {
         const response = await fetch(PDF_URL);
         if (!response.ok) {
@@ -722,6 +742,7 @@
         const outputPdf = await PDFDocument.create();
         const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
         outputPdf.addPage(targetPage);
+        highlightSignatureLine(targetPage);
 
         const outputBytes = await outputPdf.save();
         const blob = new Blob([outputBytes], { type: 'application/pdf' });
