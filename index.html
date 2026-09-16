@@ -358,6 +358,14 @@
         return `${month}/${day}/${year}`;
       }
 
+      function getCurrentLocalDate() {
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const year = String(now.getFullYear());
+        return `${month}/${day}/${year}`;
+      }
+
       function formatZipCode(rawZip) {
         const value = (rawZip || '').trim();
         if (/^\d{9}$/.test(value)) {
@@ -475,6 +483,13 @@
 
           if (normalized.includes('dateofbirth') || normalized === 'dob' || normalized.includes('birthdate')) {
             setIfTextField(field, parsed.dateOfBirth);
+          } else if (
+            /^date\d*$/.test(normalized) ||
+            /^currentdate\d*$/.test(normalized) ||
+            /^todaysdate\d*$/.test(normalized) ||
+            /[0-9]date[0-9]*$/.test(normalized)
+          ) {
+            setIfTextField(field, parsed.currentDate);
           } else if (
             normalized.includes('driverslicensenumber') ||
             normalized.includes('driverlicensenumber') ||
@@ -601,7 +616,7 @@
         }
         const form = sourcePdf.getForm();
 
-        fillPdfFormFields(form, parsed);
+        fillPdfFormFields(form, { ...parsed, currentDate: getCurrentLocalDate() });
         form.flatten();
 
         const targetPageIndex = 2; // zero-based index for the last page (page 3)
