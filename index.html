@@ -286,6 +286,23 @@
         return true;
       }
 
+      function isTransientDecodeError(error) {
+        if (!error) {
+          return false;
+        }
+
+        const name = error.name || '';
+        const message = String(error.message || error);
+
+        return (
+          name === 'NotFoundException' ||
+          name === 'ChecksumException' ||
+          name === 'FormatException' ||
+          message.includes('NotFoundException') ||
+          message.includes('No MultiFormat Readers were able to detect the code')
+        );
+      }
+
       function fillPdfFormFields(form, parsed) {
         const fields = form.getFields();
 
@@ -405,9 +422,15 @@
                 hideMessage(printError);
                 hideMessage(printStatus);
                 showSection(resultSection);
-              } else if (error && !String(error).includes('NotFoundException')) {
+              } else if (error) {
+                if (isTransientDecodeError(error)) {
+                  hideMessage(scanError);
+                  scanStatus.textContent = 'Scanning… hold still while we decode.';
+                  return;
+                }
+
                 showMessage(scanError, `Scanner error: ${error.message || String(error)}`);
-                scanStatus.textContent = 'Scanner reported an error. Scanning is still active.';
+                scanStatus.textContent = 'Scanner reported an unexpected error. Scanning is still active.';
               }
             },
             {
