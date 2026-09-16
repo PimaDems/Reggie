@@ -46,7 +46,15 @@
       }
 
       .toggle-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
         margin-top: 1rem;
+      }
+
+      .toggle-label {
+        font-size: 0.95rem;
+        color: #234;
       }
 
       button {
@@ -185,6 +193,7 @@
         <p class="status hidden" id="print-status"></p>
         <p class="error hidden" id="print-error"></p>
         <div class="toggle-actions">
+          <span id="toggle-optional-fields-label" class="toggle-label">Optional voter-registration details</span>
           <button
             id="toggle-optional-fields"
             class="secondary small"
@@ -192,11 +201,12 @@
             aria-expanded="false"
             aria-controls="optional-fields"
             aria-label="More optional voter-registration details"
+            aria-describedby="toggle-optional-fields-label"
           >
             more..
           </button>
         </div>
-        <form id="optional-fields" class="optional-form hidden" aria-labelledby="optional-fields-heading">
+        <div id="optional-fields" class="optional-form hidden" aria-labelledby="optional-fields-heading">
           <p id="optional-fields-heading"><strong>Optional voter-registration details</strong></p>
           <div class="checkbox-row">
             <input id="optional-aevl" type="checkbox" />
@@ -221,7 +231,7 @@
             <label for="optional-email">E-Mail</label>
             <input id="optional-email" type="email" autocomplete="email" />
           </div>
-        </form>
+        </div>
         <div class="actions">
           <button id="cancel-result" class="secondary">Cancel</button>
           <button id="print-btn">Print</button>
