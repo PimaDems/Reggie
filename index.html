@@ -621,6 +621,14 @@
             setCheckboxFieldValue(field, !parsed.aevl) || setIfTextField(field, parsed.aevl ? '' : 'Yes');
           } else if (
             matchesAnyFieldName(normalized, [
+              /^atleast18yearsoldbyelectionday$/,
+            ])
+          ) {
+            if (typeof field.select === 'function') {
+              field.select('/0');
+            }
+          } else if (
+            matchesAnyFieldName(normalized, [
               /^last4digitsofyourssn$/,
               /^last4digitsofssn$/,
               /^last4ssn$/,
