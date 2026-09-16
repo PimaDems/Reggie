@@ -115,6 +115,12 @@
         gap: 0.5rem;
       }
 
+      .checkbox-row label {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+
       .checkbox-row input {
         margin-top: 0.15rem;
       }
@@ -209,8 +215,10 @@
         >
           <h2 id="optional-fields-heading">Optional voter-registration details</h2>
           <div class="checkbox-row">
-            <input id="optional-aevl" name="aevl" type="checkbox" />
-            <label for="optional-aevl">AEVL (Active Early Voting List) - Send my early ballot by Mail.</label>
+            <label for="optional-aevl">
+              <input id="optional-aevl" name="aevl" type="checkbox" />
+              AEVL (Active Early Voting List) - Send my early ballot by Mail.
+            </label>
           </div>
           <div class="field-group">
             <label for="optional-ssn4">Last 4 digits of your SSN</label>
