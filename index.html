@@ -200,7 +200,14 @@
             More… optional details
           </button>
         </div>
-        <div id="optional-fields" class="optional-form hidden" role="region" aria-labelledby="optional-fields-heading">
+        <div
+          id="optional-fields"
+          class="optional-form hidden"
+          role="region"
+          aria-labelledby="optional-fields-heading"
+          aria-hidden="true"
+          hidden
+        >
           <h2 id="optional-fields-heading">Optional voter-registration details</h2>
           <div class="checkbox-row">
             <input id="optional-aevl" name="aevl" type="checkbox" />
@@ -288,6 +295,8 @@
 
       function setOptionalFieldsVisible(visible) {
         optionalFieldsForm.classList.toggle('hidden', !visible);
+        optionalFieldsForm.hidden = !visible;
+        optionalFieldsForm.setAttribute('aria-hidden', String(!visible));
         toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
         toggleOptionalFieldsButton.textContent = visible ? 'Hide optional details' : 'More… optional details';
       }
