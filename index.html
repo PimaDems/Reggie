@@ -372,6 +372,14 @@
         }
       }
 
+      function sanitizeFileNamePart(value) {
+        return (value || '')
+          .replace(/[^a-zA-Z0-9._-]+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+          .slice(0, 40);
+      }
+
       async function downloadLastPage(parsed) {
         const response = await fetch(PDF_URL);
         if (!response.ok) {
@@ -388,7 +396,7 @@
         fillPdfFormFields(form, parsed);
         form.flatten();
 
-        const targetPageIndex = sourcePdf.getPageCount() - 1;
+        const targetPageIndex = 2; // zero-based index for the last page (page 3)
         const outputPdf = await PDFDocument.create();
         const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
         outputPdf.addPage(targetPage);
@@ -397,9 +405,17 @@
         const blob = new Blob([outputBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
 
+        const safeFirstName = sanitizeFileNamePart(parsed.firstName);
+        const safeLastName = sanitizeFileNamePart(parsed.lastName);
+        const fileNameBase = [
+          'AZ-Voter-Registration',
+          safeFirstName || 'Applicant',
+          safeLastName || 'Name',
+        ].filter(Boolean).join('-');
+
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'AZ-Voter-Registration-Last-Page.pdf';
+        link.download = `AZ-Voter-Registration-${fileNameBase}.pdf`;
         document.body.appendChild(link);
         link.click();
         link.remove();
