@@ -390,9 +390,12 @@
         link.click();
         link.remove();
 
-        setTimeout(() => {
-          URL.revokeObjectURL(url);
-        }, 60000);
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(resolve);
+          });
+        });
+        URL.revokeObjectURL(url);
       }
 
       async function startScan() {
@@ -415,6 +418,7 @@
                     scanError,
                     'Barcode scanned, but expected name/date-of-birth/address fields were not found.'
                   );
+                  scanStatus.textContent = 'Decoded data is incomplete. Keep scanning or cancel and retry.';
                   return;
                 }
 
