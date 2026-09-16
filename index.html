@@ -195,6 +195,7 @@
         </dl>
         <p class="status hidden" id="print-status"></p>
         <p class="error hidden" id="print-error"></p>
+        <p class="error hidden" id="age-error"></p>
         <div class="toggle-actions">
           <button
             id="toggle-optional-fields"
@@ -273,11 +274,16 @@
 
       const printStatus = document.getElementById('print-status');
       const printError = document.getElementById('print-error');
+      const ageError = document.getElementById('age-error');
       const optionalFieldsForm = document.getElementById('optional-fields');
       const optionalAevl = document.getElementById('optional-aevl');
       const optionalSsn4 = document.getElementById('optional-ssn4');
       const optionalPhone = document.getElementById('optional-phone');
       const optionalEmail = document.getElementById('optional-email');
+
+      const ELECTION_DATE_2026 = { year: 2026, month: 11, day: 3 };
+      const UNDERAGE_ERROR_MESSAGE =
+        'This person will not be 18 years old by November 3, 2026 and is not eligible to register to vote for this election.';
 
       const codeReader = new BrowserMultiFormatReader();
       let controls = null;
@@ -324,7 +330,9 @@
         showSection(startSection);
         hideMessage(scanError);
         hideMessage(printError);
+        hideMessage(ageError);
         hideMessage(printStatus);
+        printButton.disabled = false;
         resetOptionalFields();
         scanStatus.textContent = 'Point your camera at the Big Fancy barcode on the back of your Arizona Driver\'s License.';
       }
@@ -356,6 +364,61 @@
         }
 
         return `${month}/${day}/${year}`;
+      }
+
+      function willBeEighteenByDate(dateOfBirthMMDDYYYY, targetDateISOOrPartsObject) {
+        const dobMatch = (dateOfBirthMMDDYYYY || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!dobMatch) {
+          return false;
+        }
+
+        const dobMonth = Number(dobMatch[1]);
+        const dobDay = Number(dobMatch[2]);
+        const dobYear = Number(dobMatch[3]);
+        const dobDate = new Date(dobYear, dobMonth - 1, dobDay);
+        if (
+          Number.isNaN(dobDate.getTime()) ||
+          dobDate.getFullYear() !== dobYear ||
+          dobDate.getMonth() !== dobMonth - 1 ||
+          dobDate.getDate() !== dobDay
+        ) {
+          return false;
+        }
+
+        let targetDate;
+        if (typeof targetDateISOOrPartsObject === 'string') {
+          const parts = targetDateISOOrPartsObject.split('-').map((part) => Number(part));
+          if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+            return false;
+          }
+          targetDate = { year: parts[0], month: parts[1], day: parts[2] };
+        } else if (targetDateISOOrPartsObject && typeof targetDateISOOrPartsObject === 'object') {
+          targetDate = {
+            year: Number(targetDateISOOrPartsObject.year),
+            month: Number(targetDateISOOrPartsObject.month),
+            day: Number(targetDateISOOrPartsObject.day),
+          };
+        } else {
+          return false;
+        }
+
+        const { year: targetYear, month: targetMonth, day: targetDay } = targetDate;
+        const targetDateObject = new Date(targetYear, targetMonth - 1, targetDay);
+        if (
+          Number.isNaN(targetDateObject.getTime()) ||
+          targetDateObject.getFullYear() !== targetYear ||
+          targetDateObject.getMonth() !== targetMonth - 1 ||
+          targetDateObject.getDate() !== targetDay
+        ) {
+          return false;
+        }
+
+        let age = targetYear - dobYear;
+        if (targetMonth < dobMonth || (targetMonth === dobMonth && targetDay < dobDay)) {
+          age -= 1;
+        }
+
+        return age >= 18;
       }
 
       function getCurrentLocalDate() {
@@ -660,6 +723,8 @@
       async function startScan() {
         showSection(scanSection);
         hideMessage(scanError);
+        hideMessage(ageError);
+        printButton.disabled = false;
         scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
 
         try {
@@ -691,6 +756,13 @@
 
                 hideMessage(printError);
                 hideMessage(printStatus);
+                if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
+                  hideMessage(ageError);
+                  printButton.disabled = false;
+                } else {
+                  showMessage(ageError, UNDERAGE_ERROR_MESSAGE);
+                  printButton.disabled = true;
+                }
                 showSection(resultSection);
               } else if (error) {
                 if (isTransientDecodeError(error)) {
