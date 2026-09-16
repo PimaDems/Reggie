@@ -196,6 +196,7 @@
         <p class="status hidden" id="print-status"></p>
         <p class="error hidden" id="print-error"></p>
         <p class="error hidden" id="age-error"></p>
+        <p class="error hidden" id="state-error"></p>
         <div class="toggle-actions">
           <button
             id="toggle-optional-fields"
@@ -275,6 +276,7 @@
       const printStatus = document.getElementById('print-status');
       const printError = document.getElementById('print-error');
       const ageError = document.getElementById('age-error');
+      const stateError = document.getElementById('state-error');
       const optionalFieldsForm = document.getElementById('optional-fields');
       const optionalAevl = document.getElementById('optional-aevl');
       const optionalSsn4 = document.getElementById('optional-ssn4');
@@ -284,6 +286,8 @@
       const ELECTION_DATE_2026 = { year: 2026, month: 11, day: 3 };
       const UNDERAGE_ERROR_MESSAGE =
         'This person will not be 18 years old by November 3, 2026 and is not eligible to register to vote for this election.';
+      const NON_ARIZONA_ERROR_MESSAGE =
+        'This driver license is not from Arizona. Only Arizona driver licenses can be used with this form.';
 
       const codeReader = new BrowserMultiFormatReader();
       let controls = null;
@@ -331,6 +335,7 @@
         hideMessage(scanError);
         hideMessage(printError);
         hideMessage(ageError);
+        hideMessage(stateError);
         hideMessage(printStatus);
         printButton.disabled = false;
         resetOptionalFields();
@@ -732,6 +737,7 @@
         showSection(scanSection);
         hideMessage(scanError);
         hideMessage(ageError);
+        hideMessage(stateError);
         printButton.disabled = false;
         scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
 
@@ -764,7 +770,13 @@
 
                 hideMessage(printError);
                 hideMessage(printStatus);
-                if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
+                hideMessage(ageError);
+                hideMessage(stateError);
+
+                if ((data.state || '').trim().toUpperCase() !== 'AZ') {
+                  showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
+                  printButton.disabled = true;
+                } else if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
                   hideMessage(ageError);
                   printButton.disabled = false;
                 } else {
@@ -806,6 +818,11 @@
       printButton.addEventListener('click', async () => {
         if (!parsedLicenseData) {
           showMessage(printError, 'Nothing to print. Please scan a license first.');
+          return;
+        }
+        if ((parsedLicenseData.state || '').trim().toUpperCase() !== 'AZ') {
+          showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
+          printButton.disabled = true;
           return;
         }
 
