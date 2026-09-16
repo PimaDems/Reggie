@@ -46,15 +46,7 @@
       }
 
       .toggle-actions {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
         margin-top: 1rem;
-      }
-
-      .toggle-label {
-        font-size: 0.95rem;
-        color: #234;
       }
 
       button {
@@ -193,17 +185,15 @@
         <p class="status hidden" id="print-status"></p>
         <p class="error hidden" id="print-error"></p>
         <div class="toggle-actions">
-          <span id="toggle-optional-fields-label" class="toggle-label">Optional voter-registration details</span>
           <button
             id="toggle-optional-fields"
             class="secondary small"
             type="button"
             aria-expanded="false"
             aria-controls="optional-fields"
-            aria-label="More optional voter-registration details"
-            aria-describedby="toggle-optional-fields-label"
+            aria-label="Show more optional voter-registration details"
           >
-            more..
+            more.. optional details
           </button>
         </div>
         <div id="optional-fields" class="optional-form hidden" aria-labelledby="optional-fields-heading">
@@ -294,6 +284,11 @@
       function setOptionalFieldsVisible(visible) {
         optionalFieldsForm.classList.toggle('hidden', !visible);
         toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
+        toggleOptionalFieldsButton.textContent = visible ? 'hide optional details' : 'more.. optional details';
+        toggleOptionalFieldsButton.setAttribute(
+          'aria-label',
+          visible ? 'Hide optional voter-registration details' : 'Show more optional voter-registration details'
+        );
       }
 
       function resetOptionalFields() {
