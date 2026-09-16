@@ -191,6 +191,7 @@
             type="button"
             aria-expanded="false"
             aria-controls="optional-fields"
+            aria-label="More optional voter-registration details"
           >
             more..
           </button>
@@ -400,13 +401,18 @@
         return true;
       }
 
-      function setIfCheckboxField(field, checked) {
-        if (!checked || typeof field.check !== 'function') {
-          return false;
+      function setCheckboxFieldValue(field, checked) {
+        if (checked && typeof field.check === 'function') {
+          field.check();
+          return true;
         }
 
-        field.check();
-        return true;
+        if (!checked && typeof field.uncheck === 'function') {
+          field.uncheck();
+          return true;
+        }
+
+        return false;
       }
 
       function matchesAnyFieldName(normalized, variants) {
@@ -504,7 +510,7 @@
               'sendmyearlyballotbymail',
             ])
           ) {
-            setIfCheckboxField(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
+            setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
           } else if (
             matchesAnyFieldName(normalized, [
               'last4digitsofyourssn',
