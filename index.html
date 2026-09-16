@@ -138,6 +138,11 @@
         font: inherit;
       }
 
+      .optional-form h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1rem;
+      }
+
       @media (max-width: 480px) {
         .container {
           padding: 1rem;
@@ -196,7 +201,7 @@
           </button>
         </div>
         <div id="optional-fields" class="optional-form hidden" role="region" aria-labelledby="optional-fields-heading">
-          <p id="optional-fields-heading"><strong>Optional voter-registration details</strong></p>
+          <h2 id="optional-fields-heading">Optional voter-registration details</h2>
           <div class="checkbox-row">
             <input id="optional-aevl" name="aevl" type="checkbox" />
             <label for="optional-aevl">AEVL (Active Early Voting List) - Send my early ballot by Mail.</label>
@@ -507,11 +512,13 @@
               typeof field.uncheck === 'function' ||
               typeof field.setText === 'function') &&
             matchesAnyFieldName(normalized, [
-              'aevl',
-              'activeearlyvotinglist',
-              'earlyvotinglist',
-              'earlyballotbymail',
-              'sendmyearlyballotbymail',
+              /^aevl$/,
+              /^activeearlyvotinglist$/,
+              /^earlyvotinglist$/,
+              /^earlyballotbymail$/,
+              /^sendmyearlyballotbymail$/,
+              /^aevlmailballot$/,
+              /^mailballotrequest$/,
             ])
           ) {
             setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
