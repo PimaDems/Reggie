@@ -253,6 +253,7 @@
         const city = extractField(rawData, 'DAI');
         const state = extractField(rawData, 'DAJ');
         const zip = formatZipCode(extractField(rawData, 'DAK'));
+        const licenseNumber = extractField(rawData, 'DAQ');
 
         const dateOfBirth = parseAamvaDate(extractField(rawData, 'DBB'));
 
@@ -278,6 +279,7 @@
           city,
           state,
           zip,
+          licenseNumber,
           fullAddress: addressParts.join(', '),
         };
       }
@@ -320,6 +322,14 @@
 
           if (normalized.includes('dateofbirth') || normalized === 'dob' || normalized.includes('birthdate')) {
             setIfTextField(field, parsed.dateOfBirth);
+          } else if (
+            normalized.includes('driverslicensenumber') ||
+            normalized.includes('driverlicensenumber') ||
+            normalized.includes('dlnumber') ||
+            normalized.includes('licensenumber') ||
+            normalized === 'daq'
+          ) {
+            setIfTextField(field, parsed.licenseNumber);
           } else if (normalized.includes('firstname') || normalized === 'fname') {
             setIfTextField(field, parsed.firstName);
           } else if (normalized.includes('middlename') || normalized === 'mname' || normalized === 'mi') {
@@ -342,7 +352,13 @@
             normalized.includes('homeaddress')
           ) {
             setIfTextField(field, parsed.street || parsed.fullAddress);
-          } else if (normalized === 'city' || normalized.includes('residencecity')) {
+          } else if (normalized.includes('citystatezip') || normalized.includes('citystzip')) {
+            setIfTextField(field, [parsed.city, parsed.state, parsed.zip].filter(Boolean).join(' '));
+          } else if (
+            normalized === 'city' ||
+            normalized.includes('residencecity') ||
+            (normalized.includes('city') && !normalized.includes('citizenship'))
+          ) {
             setIfTextField(field, parsed.city);
           } else if (normalized === 'state' || normalized.includes('residencestate')) {
             setIfTextField(field, parsed.state);
