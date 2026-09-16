@@ -12,6 +12,10 @@ Place a trusted local copy of the form PDF in the repository root (next to `inde
 
 `AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf`
 
+Download it from the official Arizona Secretary of State URL:
+
+`https://azsos.gov/sites/default/files/docs/AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf`
+
 The app reads this local file to avoid runtime dependency on an externally hosted PDF.
 
 ## Run locally

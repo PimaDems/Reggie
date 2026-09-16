@@ -281,20 +281,26 @@
 
       function fillPdfFormFields(form, parsed) {
         const fields = form.getFields();
+        const filledFields = [];
 
         for (const field of fields) {
           const normalized = normalizeFieldName(field.getName());
 
           if (normalized.includes('dateofbirth') || normalized === 'dob' || normalized.includes('birthdate')) {
             setIfTextField(field, parsed.dateOfBirth);
+            filledFields.push(field);
           } else if (normalized.includes('firstname') || normalized === 'fname') {
             setIfTextField(field, parsed.firstName);
+            filledFields.push(field);
           } else if (normalized.includes('middlename') || normalized === 'mname' || normalized === 'mi') {
             setIfTextField(field, parsed.middleName);
+            filledFields.push(field);
           } else if (normalized.includes('lastname') || normalized === 'lname' || normalized.includes('surname')) {
             setIfTextField(field, parsed.lastName);
+            filledFields.push(field);
           } else if (normalized.includes('name')) {
             setIfTextField(field, parsed.fullName);
+            filledFields.push(field);
           } else if (
             normalized.includes('residenceaddress') ||
             normalized.includes('streetaddress') ||
@@ -302,18 +308,54 @@
             normalized.includes('homeaddress')
           ) {
             setIfTextField(field, parsed.street || parsed.fullAddress);
+            filledFields.push(field);
           } else if (normalized === 'city' || normalized.includes('residencecity')) {
             setIfTextField(field, parsed.city);
+            filledFields.push(field);
           } else if (normalized === 'state' || normalized.includes('residencestate')) {
             setIfTextField(field, parsed.state);
+            filledFields.push(field);
           } else if (
             normalized.includes('zip') ||
             normalized.includes('postalcode') ||
             normalized.includes('zipcode')
           ) {
             setIfTextField(field, parsed.zip);
+            filledFields.push(field);
           }
         }
+
+        return filledFields;
+      }
+
+      function resolveTargetPageIndex(pdfDocument, fields) {
+        const lastPageIndex = pdfDocument.getPageCount() - 1;
+        if (!fields.length) {
+          return lastPageIndex;
+        }
+
+        const pages = pdfDocument.getPages();
+        const indexes = new Set();
+
+        for (const field of fields) {
+          if (!field.acroField || typeof field.acroField.getWidgets !== 'function') {
+            continue;
+          }
+
+          for (const widget of field.acroField.getWidgets()) {
+            const pageRef = typeof widget.P === 'function' ? widget.P() : null;
+            const index = pages.findIndex((page) => page.ref === pageRef);
+            if (index >= 0) {
+              indexes.add(index);
+            }
+          }
+        }
+
+        if (!indexes.size) {
+          return lastPageIndex;
+        }
+
+        return indexes.has(lastPageIndex) ? lastPageIndex : Math.max(...indexes);
       }
 
       async function downloadLastPage(parsed) {
@@ -326,17 +368,17 @@
         const sourcePdf = await PDFDocument.load(sourcePdfBytes);
         const form = sourcePdf.getForm();
 
-        fillPdfFormFields(form, parsed);
+        const filledFields = fillPdfFormFields(form, parsed);
         form.flatten();
 
-        const lastPageIndex = sourcePdf.getPageCount() - 1;
-        if (lastPageIndex < 0) {
+        const targetPageIndex = resolveTargetPageIndex(sourcePdf, filledFields);
+        if (targetPageIndex < 0) {
           throw new Error('Downloaded PDF has no pages.');
         }
 
         const outputPdf = await PDFDocument.create();
-        const [lastPage] = await outputPdf.copyPages(sourcePdf, [lastPageIndex]);
-        outputPdf.addPage(lastPage);
+        const [targetPage] = await outputPdf.copyPages(sourcePdf, [targetPageIndex]);
+        outputPdf.addPage(targetPage);
 
         const outputBytes = await outputPdf.save();
         const blob = new Blob([outputBytes], { type: 'application/pdf' });
@@ -390,7 +432,7 @@
                 showSection(resultSection);
               } else if (error && !String(error).includes('NotFoundException')) {
                 showMessage(scanError, `Scanner error: ${error.message || String(error)}`);
-                scanStatus.textContent = 'Scanning paused. Reposition barcode and try again.';
+                scanStatus.textContent = 'Scanner reported an error. Scanning is still active.';
               }
             },
             {
