@@ -203,7 +203,7 @@
             aria-expanded="false"
             aria-controls="optional-fields"
           >
-            More… optional details
+            More (Optional Details)…
           </button>
         </div>
         <section
@@ -303,7 +303,7 @@
         optionalFieldsForm.classList.toggle('hidden', !visible);
         optionalFieldsForm.hidden = !visible;
         toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
-        toggleOptionalFieldsButton.textContent = visible ? 'Hide optional details' : 'More… optional details';
+        toggleOptionalFieldsButton.textContent = visible ? 'Hide optional details' : 'More (Optional Details)…';
       }
 
       function resetOptionalFields() {
@@ -326,7 +326,7 @@
         hideMessage(printError);
         hideMessage(printStatus);
         resetOptionalFields();
-        scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
+        scanStatus.textContent = 'Point your camera at the Big Fancy barcode on the back of your Arizona Driver\'s License.';
       }
 
       function extractField(rawData, fieldCode) {
@@ -487,6 +487,7 @@
             /^date\d*$/.test(normalized) ||
             /^currentdate\d*$/.test(normalized) ||
             /^todaysdate\d*$/.test(normalized) ||
+            /^voterdateofsigning\d*$/.test(normalized) ||
             /[0-9]date[0-9]*$/.test(normalized)
           ) {
             setIfTextField(field, parsed.currentDate);
@@ -541,22 +542,27 @@
               typeof field.uncheck === 'function' ||
               typeof field.setText === 'function') &&
             matchesAnyFieldName(normalized, [
-              /^.*aevl.*$/,
-              /^.*activeearlyvotinglist.*$/,
-              /^.*earlyvotinglist.*$/,
-              /^.*earlyballotbymail.*$/,
-              /^.*sendmyearlyballotbymail.*$/,
-              /^.*aevlmailballot.*$/,
-              /^.*mailballotrequest.*$/,
+              /^.*iwanttobeaddedtotheaevl.*$/,
             ])
           ) {
             setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : '');
+          } else if (
+            (typeof field.check === 'function' ||
+              typeof field.uncheck === 'function' ||
+              typeof field.setText === 'function') &&
+            matchesAnyFieldName(normalized, [
+              /^.*donotwanttobeaddedtotheaevl.*$/,
+            ]) &&
+            optionalFieldsForm.hidden != true
+          ) {
+            setCheckboxFieldValue(field, !parsed.aevl) || setIfTextField(field, parsed.aevl ? '' : 'Yes');
           } else if (
             matchesAnyFieldName(normalized, [
               /^last4digitsofyourssn$/,
               /^last4digitsofssn$/,
               /^last4ssn$/,
               /^ssnlast4$/,
+              /^ssnlast4digits$/,
               /^ssnlastfour$/,
               /^socialsecuritylast4$/,
               /^socialsecuritynumberlast4$/,
