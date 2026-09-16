@@ -223,7 +223,7 @@
               <input id="optional-aevl" name="aevl" type="checkbox" aria-describedby="optional-aevl-help" />
               AEVL (Active Early Voting List)
             </label>
-          </section>
+          </div>
           <p id="optional-aevl-help" class="field-help">Send my early ballot by Mail.</p>
           <div class="field-group">
             <label for="optional-ssn4">Last 4 digits of your SSN</label>
@@ -245,7 +245,7 @@
             <label for="optional-email">E-Mail</label>
             <input id="optional-email" name="email" type="email" autocomplete="email" />
           </div>
-        </div>
+        </section>
         <div class="actions">
           <button id="cancel-result" class="secondary">Cancel</button>
           <button id="print-btn">Print</button>
@@ -532,13 +532,13 @@
               typeof field.uncheck === 'function' ||
               typeof field.setText === 'function') &&
             matchesAnyFieldName(normalized, [
-              /^aevl$/,
-              /^activeearlyvotinglist$/,
-              /^earlyvotinglist$/,
-              /^earlyballotbymail$/,
-              /^sendmyearlyballotbymail$/,
-              /^aevlmailballot$/,
-              /^mailballotrequest$/,
+              /^.*aevl.*$/,
+              /^.*activeearlyvotinglist.*$/,
+              /^.*earlyvotinglist.*$/,
+              /^.*earlyballotbymail.*$/,
+              /^.*sendmyearlyballotbymail.*$/,
+              /^.*aevlmailballot.*$/,
+              /^.*mailballotrequest.*$/,
             ])
           ) {
             setCheckboxFieldValue(field, parsed.aevl) || setIfTextField(field, parsed.aevl ? 'Yes' : 'No');
