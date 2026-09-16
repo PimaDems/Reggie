@@ -1,6 +1,6 @@
-# AZVoteReg
+# Reggie
 
-Static web app that:
+Static Voter Registration Application:
 
 1. Scans the PDF417 barcode on the back of an Arizona Driver License (mobile or desktop browser camera).
 2. Parses and displays Name, Date of Birth, and Address.
@@ -17,13 +17,3 @@ Download it from the official Arizona Secretary of State URL:
 `https://azsos.gov/sites/default/files/docs/AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf`
 
 The app reads this local file to avoid runtime dependency on an externally hosted PDF.
-
-## Run locally
-
-From the repository root:
-
-```bash
-python -m http.server 8000
-```
-
-Then open `http://localhost:8000` in a browser with camera access.
