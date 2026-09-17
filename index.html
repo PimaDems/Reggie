@@ -251,7 +251,7 @@
           hidden
         >
           <h2 id="optional-fields-heading">Optional voter-registration details</h2>
-          <div class="checkbox-row">
+          <div class="checkbox-row" style="visibility: collapse;">
             <label>
               <input id="optional-aevl" name="aevl" type="checkbox" />
               AEVL (Active Early Voting List). Send my early ballot by Mail.
@@ -280,6 +280,7 @@
         </section>
         <div class="actions">
           <button id="cancel-result" class="secondary">Cancel</button>
+          <button id="download-btn" class="secondary">Download</button>
           <button id="print-btn">Print</button>
         </div>
       </section>
@@ -301,6 +302,7 @@
       const cancelScanButton = document.getElementById('cancel-scan');
       const cancelHidScanButton = document.getElementById('cancel-hid-scan');
       const cancelResultButton = document.getElementById('cancel-result');
+      const downloadButton = document.getElementById('download-btn');
       const printButton = document.getElementById('print-btn');
       const toggleOptionalFieldsButton = document.getElementById('toggle-optional-fields');
 
@@ -365,9 +367,9 @@
         {
           label: '22 - Are you a citizen of the United States of America?',
           x: 35,
-          y: 187,
-          width: 242,
-          height: 45,
+          y: 221,
+          width: 180,
+          height: 10,
         },
         {
           label: '22 - Signature',
@@ -411,6 +413,12 @@
       const codeReader = new BrowserMultiFormatReader();
       let controls = null;
       let parsedLicenseData = null;
+      let autoPrintInProgress = false;
+
+      function isAutoPrintModeEnabled() {
+        const mode = new URLSearchParams(window.location.search).get('mode');
+        return (mode || '').trim().toLowerCase() === 'autoprint';
+      }
 
       function showSection(section) {
         for (const node of [startSection, scanSection, hidScanSection, resultSection]) {
@@ -465,6 +473,7 @@
         hideMessage(ageError);
         hideMessage(stateError);
         hideMessage(printStatus);
+        downloadButton.disabled = false;
         printButton.disabled = false;
         resetOptionalFields();
         resetHidScanState();
@@ -490,15 +499,54 @@
 
         if ((data.state || '').trim().toUpperCase() !== 'AZ') {
           showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
+          downloadButton.disabled = true;
           printButton.disabled = true;
         } else if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
+          downloadButton.disabled = false;
           printButton.disabled = false;
         } else {
           showMessage(ageError, UNDERAGE_ERROR_MESSAGE);
+          downloadButton.disabled = true;
           printButton.disabled = true;
         }
 
         showSection(resultSection);
+
+        if (isAutoPrintModeEnabled()) {
+          void maybeAutoPrintAndReset();
+        }
+      }
+
+      async function maybeAutoPrintAndReset() {
+        if (autoPrintInProgress || !parsedLicenseData) {
+          return;
+        }
+
+        if ((parsedLicenseData.state || '').trim().toUpperCase() !== 'AZ') {
+          return;
+        }
+
+        if (!willBeEighteenByDate(parsedLicenseData.dateOfBirth, ELECTION_DATE_2026)) {
+          return;
+        }
+
+        autoPrintInProgress = true;
+        downloadButton.disabled = true;
+        printButton.disabled = true;
+        hideMessage(printError);
+        showMessage(printStatus, 'Auto-print mode enabled. Opening print dialog...');
+
+        try {
+          await printRegistrationPdf({
+            ...parsedLicenseData,
+            ...getOptionalRegistrationData(),
+          });
+        } catch (error) {
+          showMessage(printError, error.message || 'Unable to prepare the PDF for printing.');
+        } finally {
+          autoPrintInProgress = false;
+          resetToStart();
+        }
       }
 
       function handleDecodedBarcodeText(rawText, options = {}) {
@@ -923,7 +971,7 @@
         }
       }
 
-      async function downloadLastPage(parsed) {
+      async function generateRegistrationPdfBlob(parsed) {
         const response = await fetch(PDF_URL);
         if (!response.ok) {
           throw new Error('Could not download the voter registration form PDF.');
@@ -949,21 +997,38 @@
         const promptHighlights = getPromptHighlights(parsed);
         highlightPromptText(targetPage, promptHighlights);
 
-        const outputBytes = await outputPdf.save();
-        const blob = new Blob([outputBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
+        if (willBeEighteenByDate(parsed.dateOfBirth, ELECTION_DATE_2026)) {
+          // Requested mark: black circle, size 4, at PDF coordinates x=130, y=200.
+          targetPage.drawCircle({
+            x: 221.5,
+            y: 204.5,
+            size: 4,
+            color: rgb(0, 0, 0),
+            opacity: 1,
+          });
+        }
 
+        const outputBytes = await outputPdf.save();
+        return new Blob([outputBytes], { type: 'application/pdf' });
+      }
+
+      function buildRegistrationFileName(parsed) {
         const safeFirstName = sanitizeFileNamePart(parsed.firstName);
         const safeLastName = sanitizeFileNamePart(parsed.lastName);
-        const fileNameBase = [
+        return [
           'AZ-Voter-Registration',
           safeFirstName || 'Applicant',
           safeLastName || 'Name',
         ].filter(Boolean).join('-');
+      }
+
+      async function downloadLastPage(parsed) {
+        const blob = await generateRegistrationPdfBlob(parsed);
+        const url = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
         link.href = url;
-        link.download = `AZ-Voter-Registration-${fileNameBase}.pdf`;
+        link.download = `${buildRegistrationFileName(parsed)}.pdf`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -976,6 +1041,86 @@
         URL.revokeObjectURL(url);
       }
 
+      async function printRegistrationPdf(parsed) {
+        const blob = await generateRegistrationPdfBlob(parsed);
+        const url = URL.createObjectURL(blob);
+        const existingFrame = document.getElementById('print-frame');
+        if (existingFrame) {
+          existingFrame.remove();
+        }
+
+        const printFrame = document.createElement('iframe');
+        printFrame.id = 'print-frame';
+        printFrame.src = url;
+        printFrame.type = 'application/pdf';
+        printFrame.setAttribute('aria-hidden', 'true');
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+
+        await new Promise((resolve, reject) => {
+          let cleanedUp = false;
+          let resolved = false;
+
+          const cleanup = () => {
+            if (cleanedUp) {
+              return;
+            }
+            cleanedUp = true;
+            setTimeout(() => {
+              URL.revokeObjectURL(url);
+              printFrame.remove();
+            }, 30000);
+          };
+
+          const complete = () => {
+            if (resolved) {
+              return;
+            }
+            resolved = true;
+            cleanup();
+            resolve();
+          };
+
+          const fail = () => {
+            if (resolved) {
+              return;
+            }
+            resolved = true;
+            cleanup();
+            reject(new Error('Unable to open the browser print dialog.'));
+          };
+
+          printFrame.addEventListener('load', () => {
+            const frameWindow = printFrame.contentWindow;
+            if (!frameWindow) {
+              fail();
+              return;
+            }
+
+            const fallbackTimer = setTimeout(complete, 1200);
+
+            try {
+              frameWindow.onafterprint = () => {
+                clearTimeout(fallbackTimer);
+                complete();
+              };
+              frameWindow.focus();
+              frameWindow.print();
+            } catch (error) {
+              clearTimeout(fallbackTimer);
+              fail();
+            }
+          }, { once: true });
+
+          printFrame.addEventListener('error', fail, { once: true });
+          document.body.appendChild(printFrame);
+        });
+      }
+
       async function startScan() {
         stopActiveCameraControls();
         parsedLicenseData = null;
@@ -984,6 +1129,7 @@
         hideMessage(scanError);
         hideMessage(ageError);
         hideMessage(stateError);
+        downloadButton.disabled = false;
         printButton.disabled = false;
         scanStatus.textContent = CAMERA_SCAN_PROMPT;
 
@@ -1035,6 +1181,7 @@
         hideMessage(stateError);
         hideMessage(printError);
         hideMessage(printStatus);
+        downloadButton.disabled = false;
         printButton.disabled = false;
         resetHidScanState();
         focusHidScanInput();
@@ -1077,6 +1224,35 @@
         optionalSsn4.value = optionalSsn4.value.replace(/\D/g, '').slice(0, 4);
       });
 
+      downloadButton.addEventListener('click', async () => {
+        if (!parsedLicenseData) {
+          showMessage(printError, 'Nothing to download. Please scan a license first.');
+          return;
+        }
+        if ((parsedLicenseData.state || '').trim().toUpperCase() !== 'AZ') {
+          showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
+          downloadButton.disabled = true;
+          return;
+        }
+
+        downloadButton.disabled = true;
+        hideMessage(printError);
+        showMessage(printStatus, 'Generating PDF download...');
+
+        try {
+          await downloadLastPage({
+            ...parsedLicenseData,
+            ...getOptionalRegistrationData(),
+          });
+          showMessage(printStatus, 'PDF downloaded successfully.');
+        } catch (error) {
+          hideMessage(printStatus);
+          showMessage(printError, error.message || 'Unable to generate PDF.');
+        } finally {
+          downloadButton.disabled = false;
+        }
+      });
+
       printButton.addEventListener('click', async () => {
         if (!parsedLicenseData) {
           showMessage(printError, 'Nothing to print. Please scan a license first.');
@@ -1090,17 +1266,17 @@
 
         printButton.disabled = true;
         hideMessage(printError);
-        showMessage(printStatus, 'Generating pre-filled PDF...');
+        showMessage(printStatus, 'Generating PDF for printing...');
 
         try {
-          await downloadLastPage({
+          await printRegistrationPdf({
             ...parsedLicenseData,
             ...getOptionalRegistrationData(),
           });
-          showMessage(printStatus, 'Download ready. Use your local printer to print the file.');
+          showMessage(printStatus, 'Print dialog opened for the registration form.');
         } catch (error) {
           hideMessage(printStatus);
-          showMessage(printError, error.message || 'Unable to generate PDF.');
+          showMessage(printError, error.message || 'Unable to prepare the PDF for printing.');
         } finally {
           printButton.disabled = false;
         }
