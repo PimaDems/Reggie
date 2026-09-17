@@ -294,63 +294,68 @@
         color: rgb(1, 1, 0),
         opacity: 0.35,
       };
-      const BOX_22_SIGNATURE_HIGHLIGHT = {
-        x: 74,
-        y: 69,
-        width: 236,
-        height: 10,
-      };
+
       // Prompt rectangles derived from page 3 text bounds in the source PDF
       // (AZ-State-Voter-Registration-Form-Dec2025-fillable.pdf, 612x792, lower-left origin).
       const BOX_PROMPT_HIGHLIGHTS = [
         {
           label: '7 - Address where you get mail',
-          x: 22.25,
-          y: 491.37,
-          width: 112.38,
+          x: 35,
+          y: 494,
+          width: 100,
           height: 10.0,
         },
         {
           label: '14 - Party Preference',
-          x: 20.41,
-          y: 361.47,
-          width: 75.76,
-          height: 12.46,
+          x: 35,
+          y: 366.5,
+          width: 63,
+          height: 10,
         },
         {
           label: '22 - Are you a citizen of the United States of America?',
-          x: 20.16,
-          y: 216.47,
-          width: 191.09,
-          height: 11.83,
+          x: 35,
+          y: 187,
+          width: 242,
+          height: 45,
+        },
+        {
+          label: '22 - Signature',
+          x: 35,
+          y: 89.5,
+          width: 40,
+          height: 10,
         },
       ];
       const EMPTY_FIELD_PROMPT_HIGHLIGHTS = {
         ssnLastFour: {
           label: '9 - Last 4 digits of your SSN',
-          x: 244.06,
-          y: 456.47,
-          width: 99.58,
-          height: 15.84,
+          x: 257,
+          y: 461.5,
+          width: 88,
+          height: 10,
         },
         telephone: {
           label: '15 - Telephone Number',
-          x: 213.41,
-          y: 361.47,
-          width: 84.37,
-          height: 14.54,
+          x: 228,
+          y: 364.5,
+          width: 70,
+          height: 10,
         },
         email: {
           label: '21 - E-Mail',
-          x: 406.72,
-          y: 261.47,
-          width: 39.98,
-          height: 14.54,
+          x: 422,
+          y: 265,
+          width: 25,
+          height: 10,
         },
-      };
-      const BOX_22_PROMPT_SIGNATURE_LINE_HIGHLIGHT = {
-        label: '22 - Signature line',
-        ...BOX_22_SIGNATURE_HIGHLIGHT,
+        aevl: {
+          label: '1 - Active Early Voting List',
+          x: 35,
+          y: 671.5,
+          width: 108,
+          height: 10,
+        },
       };
 
       const codeReader = new BrowserMultiFormatReader();
@@ -777,9 +782,6 @@
         });
       }
 
-      function highlightSignatureLine(page) {
-        drawYellowHighlight(page, BOX_22_PROMPT_SIGNATURE_LINE_HIGHLIGHT);
-      }
 
       function getPromptHighlights(parsed) {
         const highlights = [...BOX_PROMPT_HIGHLIGHTS];
@@ -792,6 +794,10 @@
         }
         if (!parsed.email) {
           highlights.push(EMPTY_FIELD_PROMPT_HIGHLIGHTS.email);
+        }
+        console.log('parsed.aevl:', parsed.aevl);
+        if (!parsed.aevl) {
+          highlights.push(EMPTY_FIELD_PROMPT_HIGHLIGHTS.aevl);
         }
 
         return highlights;
@@ -828,7 +834,6 @@
         outputPdf.addPage(targetPage);
         const promptHighlights = getPromptHighlights(parsed);
         highlightPromptText(targetPage, promptHighlights);
-        highlightSignatureLine(targetPage);
 
         const outputBytes = await outputPdf.save();
         const blob = new Blob([outputBytes], { type: 'application/pdf' });
