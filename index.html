@@ -575,24 +575,6 @@
         return false;
       }
 
-      function setRadioGroupValue(field, value) {
-        if (!value || typeof field.select !== 'function') {
-          return false;
-        }
-
-        const normalizedValue = normalizeFieldName(value);
-        const options =
-          typeof field.getOptions === 'function'
-            ? field.getOptions().filter((option) => normalizeFieldName(String(option)) === normalizedValue)
-            : [];
-
-        if (!options.length) {
-          return false;
-        }
-
-        field.select(options[0]);
-        return true;
-      }
 
       function matchesAnyFieldName(normalized, variants) {
         return variants.some((variant) =>
@@ -653,11 +635,6 @@
 
       function fillPdfFormFields(form, parsed) {
         const fields = form.getFields();
-        const ageByElectionDayEligible =
-          parsed.ageByElectionDayEligible === true ||
-          (parsed.ageByElectionDayEligible == null &&
-            willBeEighteenByDate(parsed.dateOfBirth, ELECTION_DATE_2026));
-
         for (const field of fields) {
           const normalized = normalizeFieldName(field.getName());
 
@@ -717,16 +694,6 @@
             normalized.includes('zipcode')
           ) {
             setIfTextField(field, parsed.zip);
-          } else if (
-            ageByElectionDayEligible &&
-            typeof field.select === 'function' &&
-            matchesAnyFieldName(normalized, [
-              /^atleast18yearsoldbyelectionday\d*$/,
-              /^willyoubeatleast18yearsoldbyelectionday\d*$/,
-              /^18yearsoldbyelectionday\d*$/,
-            ])
-          ) {
-            setRadioGroupValue(field, 'Yes');
           } else if (
             (typeof field.check === 'function' ||
               typeof field.uncheck === 'function' ||
@@ -852,7 +819,6 @@
         fillPdfFormFields(form, {
           ...parsed,
           currentDate: getCurrentLocalDate(),
-          ageByElectionDayEligible: willBeEighteenByDate(parsed.dateOfBirth, ELECTION_DATE_2026),
         });
         form.flatten();
 
