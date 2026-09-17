@@ -101,6 +101,14 @@
         margin-top: 0.75rem;
       }
 
+      .visually-hidden-input {
+        position: absolute;
+        left: -10000px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
       .optional-form {
         margin-top: 0.75rem;
         padding: 1rem;
@@ -170,6 +178,7 @@
         </p>
         <div class="actions">
           <button id="start-scan">Scan Driver License</button>
+          <button id="start-hid-scan" class="secondary">Scan with USB Barcode Reader</button>
         </div>
       </section>
 
@@ -180,6 +189,33 @@
         <p class="error hidden" id="scan-error"></p>
         <div class="actions">
           <button id="cancel-scan" class="secondary">Cancel</button>
+        </div>
+      </section>
+
+      <section id="hid-scan-section" class="hidden">
+        <h1>Scan with USB Barcode Reader</h1>
+        <p>
+          Keep this browser window focused, then scan the <strong>back</strong> of the license with
+          your USB barcode reader. If needed, click anywhere in this panel to refocus the scanner
+          input before scanning again.
+        </p>
+        <p class="status" id="hid-scan-status">
+          Ready for scanner input. Most USB barcode readers automatically finish with Enter.
+        </p>
+        <p class="error hidden" id="hid-scan-error"></p>
+        <label class="hidden" for="hid-scan-input">USB barcode scanner input</label>
+        <textarea
+          id="hid-scan-input"
+          class="visually-hidden-input"
+          inputmode="none"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          aria-label="USB barcode scanner input"
+        ></textarea>
+        <div class="actions">
+          <button id="cancel-hid-scan" class="secondary">Cancel</button>
         </div>
       </section>
 
@@ -257,10 +293,13 @@
 
       const startSection = document.getElementById('start-section');
       const scanSection = document.getElementById('scan-section');
+      const hidScanSection = document.getElementById('hid-scan-section');
       const resultSection = document.getElementById('result-section');
 
       const startScanButton = document.getElementById('start-scan');
+      const startHidScanButton = document.getElementById('start-hid-scan');
       const cancelScanButton = document.getElementById('cancel-scan');
+      const cancelHidScanButton = document.getElementById('cancel-hid-scan');
       const cancelResultButton = document.getElementById('cancel-result');
       const printButton = document.getElementById('print-btn');
       const toggleOptionalFieldsButton = document.getElementById('toggle-optional-fields');
@@ -268,6 +307,9 @@
       const video = document.getElementById('video');
       const scanStatus = document.getElementById('scan-status');
       const scanError = document.getElementById('scan-error');
+      const hidScanStatus = document.getElementById('hid-scan-status');
+      const hidScanError = document.getElementById('hid-scan-error');
+      const hidScanInput = document.getElementById('hid-scan-input');
 
       const resultName = document.getElementById('result-name');
       const resultDob = document.getElementById('result-dob');
@@ -288,6 +330,14 @@
         'This person will not be 18 years old by November 3, 2026 and is not eligible to register to vote for this election.';
       const NON_ARIZONA_ERROR_MESSAGE =
         'This driver license is not from Arizona. Only Arizona driver licenses can be used with this form.';
+      const INCOMPLETE_DATA_ERROR_MESSAGE =
+        'Barcode scanned, but expected name, date-of-birth, and street address fields were not found.';
+      const CAMERA_SCAN_PROMPT = 'Point your camera at the PDF417 barcode.';
+      const CAMERA_SCAN_RESET_PROMPT =
+        'Point your camera at the Big Fancy barcode on the back of your Arizona Driver\'s License.';
+      const HID_SCAN_PROMPT =
+        'Ready for scanner input. Most USB barcode readers automatically finish with Enter.';
+      const HID_INCOMPLETE_STATUS_MESSAGE = 'Decoded data is incomplete. Scan again or cancel and retry.';
       // pdf-lib coordinates are PDF points with origin (0,0) at the lower-left corner.
       // These Box 22 signature-line values were derived from inspecting page 3 (612x792) of the source PDF.
       const HIGHLIGHT_STYLE = {
@@ -363,7 +413,7 @@
       let parsedLicenseData = null;
 
       function showSection(section) {
-        for (const node of [startSection, scanSection, resultSection]) {
+        for (const node of [startSection, scanSection, hidScanSection, resultSection]) {
           node.classList.toggle('hidden', node !== section);
         }
       }
@@ -393,12 +443,21 @@
         setOptionalFieldsVisible(false);
       }
 
-      function resetToStart() {
+      function stopActiveCameraControls() {
         if (controls) {
           controls.stop();
           controls = null;
         }
+      }
 
+      function resetHidScanState() {
+        hidScanInput.value = '';
+        hidScanStatus.textContent = HID_SCAN_PROMPT;
+        hideMessage(hidScanError);
+      }
+
+      function resetToStart() {
+        stopActiveCameraControls();
         parsedLicenseData = null;
         showSection(startSection);
         hideMessage(scanError);
@@ -408,7 +467,62 @@
         hideMessage(printStatus);
         printButton.disabled = false;
         resetOptionalFields();
-        scanStatus.textContent = 'Point your camera at the Big Fancy barcode on the back of your Arizona Driver\'s License.';
+        resetHidScanState();
+        scanStatus.textContent = CAMERA_SCAN_RESET_PROMPT;
+      }
+
+      function focusHidScanInput() {
+        hidScanInput.focus();
+        hidScanInput.select();
+      }
+
+      function showDecodedLicenseResult(data) {
+        parsedLicenseData = data;
+
+        resultName.textContent = data.fullName;
+        resultDob.textContent = data.dateOfBirth;
+        resultAddress.textContent = data.fullAddress;
+
+        hideMessage(printError);
+        hideMessage(printStatus);
+        hideMessage(ageError);
+        hideMessage(stateError);
+
+        if ((data.state || '').trim().toUpperCase() !== 'AZ') {
+          showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
+          printButton.disabled = true;
+        } else if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
+          printButton.disabled = false;
+        } else {
+          showMessage(ageError, UNDERAGE_ERROR_MESSAGE);
+          printButton.disabled = true;
+        }
+
+        showSection(resultSection);
+      }
+
+      function handleDecodedBarcodeText(rawText, options = {}) {
+        const { errorNode, statusNode, incompleteStatusMessage, beforeShowResult } = options;
+        const data = parseLicenseData(rawText);
+
+        if (!data.fullName || !data.dateOfBirth || !data.street) {
+          if (errorNode) {
+            showMessage(errorNode, INCOMPLETE_DATA_ERROR_MESSAGE);
+          }
+          if (statusNode && incompleteStatusMessage) {
+            statusNode.textContent = incompleteStatusMessage;
+          }
+          return false;
+        }
+
+        if (errorNode) {
+          hideMessage(errorNode);
+        }
+        if (typeof beforeShowResult === 'function') {
+          beforeShowResult();
+        }
+        showDecodedLicenseResult(data);
+        return true;
       }
 
       function extractField(rawData, fieldCode) {
@@ -863,12 +977,15 @@
       }
 
       async function startScan() {
+        stopActiveCameraControls();
+        parsedLicenseData = null;
         showSection(scanSection);
+        resetHidScanState();
         hideMessage(scanError);
         hideMessage(ageError);
         hideMessage(stateError);
         printButton.disabled = false;
-        scanStatus.textContent = 'Point your camera at the PDF417 barcode.';
+        scanStatus.textContent = CAMERA_SCAN_PROMPT;
 
         try {
           controls = await codeReader.decodeFromVideoDevice(
@@ -878,41 +995,16 @@
               controls = activeControls;
 
               if (result && result.getBarcodeFormat() === BarcodeFormat.PDF_417) {
-                const data = parseLicenseData(result.getText());
-
-                if (!data.fullName || !data.dateOfBirth || !data.street) {
-                  showMessage(
-                    scanError,
-                    'Barcode scanned, but expected name, date-of-birth, and street address fields were not found.'
-                  );
-                  scanStatus.textContent = 'Decoded data is incomplete. Keep scanning or cancel and retry.';
+                if (
+                  handleDecodedBarcodeText(result.getText(), {
+                    errorNode: scanError,
+                    statusNode: scanStatus,
+                    incompleteStatusMessage: 'Decoded data is incomplete. Keep scanning or cancel and retry.',
+                    beforeShowResult: stopActiveCameraControls,
+                  })
+                ) {
                   return;
                 }
-
-                parsedLicenseData = data;
-                controls.stop();
-                controls = null;
-
-                resultName.textContent = data.fullName;
-                resultDob.textContent = data.dateOfBirth;
-                resultAddress.textContent = data.fullAddress;
-
-                hideMessage(printError);
-                hideMessage(printStatus);
-                hideMessage(ageError);
-                hideMessage(stateError);
-
-                if ((data.state || '').trim().toUpperCase() !== 'AZ') {
-                  showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
-                  printButton.disabled = true;
-                } else if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
-                  hideMessage(ageError);
-                  printButton.disabled = false;
-                } else {
-                  showMessage(ageError, UNDERAGE_ERROR_MESSAGE);
-                  printButton.disabled = true;
-                }
-                showSection(resultSection);
               } else if (error) {
                 if (isTransientDecodeError(error)) {
                   hideMessage(scanError);
@@ -934,9 +1026,50 @@
         }
       }
 
+      function startHidScan() {
+        stopActiveCameraControls();
+        parsedLicenseData = null;
+        showSection(hidScanSection);
+        hideMessage(scanError);
+        hideMessage(ageError);
+        hideMessage(stateError);
+        hideMessage(printError);
+        hideMessage(printStatus);
+        printButton.disabled = false;
+        resetHidScanState();
+        focusHidScanInput();
+      }
+
       startScanButton.addEventListener('click', startScan);
+      startHidScanButton.addEventListener('click', startHidScan);
       cancelScanButton.addEventListener('click', resetToStart);
+      cancelHidScanButton.addEventListener('click', resetToStart);
       cancelResultButton.addEventListener('click', resetToStart);
+      hidScanSection.addEventListener('click', focusHidScanInput);
+      hidScanInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== 'Tab') {
+          return;
+        }
+
+        event.preventDefault();
+        const rawText = hidScanInput.value.trim();
+        hidScanInput.value = '';
+
+        if (!rawText) {
+          focusHidScanInput();
+          return;
+        }
+
+        if (
+          !handleDecodedBarcodeText(rawText, {
+            errorNode: hidScanError,
+            statusNode: hidScanStatus,
+            incompleteStatusMessage: HID_INCOMPLETE_STATUS_MESSAGE,
+          })
+        ) {
+          focusHidScanInput();
+        }
+      });
       toggleOptionalFieldsButton.addEventListener('click', () => {
         setOptionalFieldsVisible(optionalFieldsForm.hidden);
       });
