@@ -101,12 +101,18 @@
         margin-top: 0.75rem;
       }
 
-      .visually-hidden-input {
+      .visually-hidden-input-old {
         position: absolute;
         left: -10000px;
         width: 1px;
         height: 1px;
         opacity: 0;
+      }
+      .visually-hidden-input {
+        width: 500px;
+        height: 500px;
+        border: 0px;
+        border
       }
 
       .optional-form {
@@ -177,8 +183,23 @@
           then print the last page of the Arizona voter registration form.
         </p>
         <div class="actions">
-          <button id="start-scan">Scan Driver License</button>
-          <button id="start-hid-scan" class="secondary">Scan with USB Barcode Reader</button>
+          <button id="start-scan">Scan Driver License with Camera</button>
+        </div>
+
+        <div id="hid-scan-section" class="hidden">
+          <p class="status" id="hid-scan-status"></p>
+          <p class="error hidden" id="hid-scan-error"></p>
+          <label class="hidden" for="hid-scan-input">USB barcode scanner input</label>
+          <textarea
+            id="hid-scan-input"
+            class="visually-hidden-input"
+            inputmode="none"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            aria-label="USB barcode scanner input"
+          ></textarea>
         </div>
       </section>
 
@@ -189,33 +210,6 @@
         <p class="error hidden" id="scan-error"></p>
         <div class="actions">
           <button id="cancel-scan" class="secondary">Cancel</button>
-        </div>
-      </section>
-
-      <section id="hid-scan-section" class="hidden">
-        <h1>Scan with USB Barcode Reader</h1>
-        <p>
-          Keep this browser window focused, then scan the <strong>back</strong> of the license with
-          your USB barcode reader. If needed, click anywhere in this panel to refocus the scanner
-          input before scanning again.
-        </p>
-        <p class="status" id="hid-scan-status">
-          Ready for scanner input. Most USB barcode readers automatically finish with Enter.
-        </p>
-        <p class="error hidden" id="hid-scan-error"></p>
-        <label class="hidden" for="hid-scan-input">USB barcode scanner input</label>
-        <textarea
-          id="hid-scan-input"
-          class="visually-hidden-input"
-          inputmode="none"
-          autocomplete="off"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck="false"
-          aria-label="USB barcode scanner input"
-        ></textarea>
-        <div class="actions">
-          <button id="cancel-hid-scan" class="secondary">Cancel</button>
         </div>
       </section>
 
@@ -287,6 +281,9 @@
     </main>
 
     <script type="module">
+
+      // #region Constants and DOM references
+
       import { BrowserMultiFormatReader, BarcodeFormat } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
       import { PDFDocument, rgb } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
 
@@ -298,9 +295,7 @@
       const resultSection = document.getElementById('result-section');
 
       const startScanButton = document.getElementById('start-scan');
-      const startHidScanButton = document.getElementById('start-hid-scan');
       const cancelScanButton = document.getElementById('cancel-scan');
-      const cancelHidScanButton = document.getElementById('cancel-hid-scan');
       const cancelResultButton = document.getElementById('cancel-result');
       const downloadButton = document.getElementById('download-btn');
       const printButton = document.getElementById('print-btn');
@@ -410,195 +405,58 @@
         },
       };
 
+      // #endregion
+
       const codeReader = new BrowserMultiFormatReader();
       let controls = null;
       let parsedLicenseData = null;
       let autoPrintInProgress = false;
+
+      // #region Utility Functions
+
+      function sanitizeFileNamePart(value) {
+        return (value || '')
+          .replace(/[^a-zA-Z0-9._-]+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+          .slice(0, 40);
+      }
+
+      function isValidUsPhoneDigits(digits) {
+        return /^\d{10}$/.test(digits);
+      }
+
+      function formatPhoneNumber(rawPhone) {
+        const digits = (rawPhone || '').replace(/\D/g, '');
+        if (!digits) {
+          return '';
+        }
+        // Allow an optional leading "1" country code.
+        const tenDigits = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+        if (!isValidUsPhoneDigits(tenDigits)) {
+          return rawPhone.trim();
+        }
+        return `${tenDigits.slice(0, 3)}-${tenDigits.slice(3, 6)}-${tenDigits.slice(6)}`;
+      }
+
+      function isValidEmail(rawEmail) {
+        const value = (rawEmail || '').trim();
+        if (!value) {
+          return true; // optional field, empty is fine
+        }
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      }
 
       function isAutoPrintModeEnabled() {
         const mode = new URLSearchParams(window.location.search).get('mode');
         return (mode || '').trim().toLowerCase() === 'autoprint';
       }
 
-      function showSection(section) {
-        for (const node of [startSection, scanSection, hidScanSection, resultSection]) {
-          node.classList.toggle('hidden', node !== section);
-        }
-      }
-
-      function showMessage(node, message) {
-        node.textContent = message;
-        node.classList.remove('hidden');
-      }
-
-      function hideMessage(node) {
-        node.textContent = '';
-        node.classList.add('hidden');
-      }
-
-      function setOptionalFieldsVisible(visible) {
-        optionalFieldsForm.classList.toggle('hidden', !visible);
-        optionalFieldsForm.hidden = !visible;
-        toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
-        toggleOptionalFieldsButton.textContent = visible ? 'Hide optional details' : 'More (Optional Details)…';
-      }
-
-      function resetOptionalFields() {
-        optionalAevl.checked = false;
-        optionalSsn4.value = '';
-        optionalPhone.value = '';
-        optionalEmail.value = '';
-        setOptionalFieldsVisible(false);
-      }
-
-      function stopActiveCameraControls() {
-        if (controls) {
-          controls.stop();
-          controls = null;
-        }
-      }
-
-      function resetHidScanState() {
-        hidScanInput.value = '';
-        hidScanStatus.textContent = HID_SCAN_PROMPT;
-        hideMessage(hidScanError);
-      }
-
-      function resetToStart() {
-        stopActiveCameraControls();
-        parsedLicenseData = null;
-        showSection(startSection);
-        hideMessage(scanError);
-        hideMessage(printError);
-        hideMessage(ageError);
-        hideMessage(stateError);
-        hideMessage(printStatus);
-        downloadButton.disabled = false;
-        printButton.disabled = false;
-        resetOptionalFields();
-        resetHidScanState();
-        scanStatus.textContent = CAMERA_SCAN_RESET_PROMPT;
-      }
-
-      function focusHidScanInput() {
-        hidScanInput.focus();
-        hidScanInput.select();
-      }
-
-      function showDecodedLicenseResult(data) {
-        parsedLicenseData = data;
-
-        resultName.textContent = data.fullName;
-        resultDob.textContent = data.dateOfBirth;
-        resultAddress.textContent = data.fullAddress;
-
-        hideMessage(printError);
-        hideMessage(printStatus);
-        hideMessage(ageError);
-        hideMessage(stateError);
-
-        if ((data.state || '').trim().toUpperCase() !== 'AZ') {
-          showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
-          downloadButton.disabled = true;
-          printButton.disabled = true;
-        } else if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
-          downloadButton.disabled = false;
-          printButton.disabled = false;
-        } else {
-          showMessage(ageError, UNDERAGE_ERROR_MESSAGE);
-          downloadButton.disabled = true;
-          printButton.disabled = true;
-        }
-
-        showSection(resultSection);
-
-        if (isAutoPrintModeEnabled()) {
-          void maybeAutoPrintAndReset();
-        }
-      }
-
-      async function maybeAutoPrintAndReset() {
-        if (autoPrintInProgress || !parsedLicenseData) {
-          return;
-        }
-
-        if ((parsedLicenseData.state || '').trim().toUpperCase() !== 'AZ') {
-          return;
-        }
-
-        if (!willBeEighteenByDate(parsedLicenseData.dateOfBirth, ELECTION_DATE_2026)) {
-          return;
-        }
-
-        autoPrintInProgress = true;
-        downloadButton.disabled = true;
-        printButton.disabled = true;
-        hideMessage(printError);
-        showMessage(printStatus, 'Auto-print mode enabled. Opening print dialog...');
-
-        try {
-          await printRegistrationPdf({
-            ...parsedLicenseData,
-            ...getOptionalRegistrationData(),
-          });
-        } catch (error) {
-          showMessage(printError, error.message || 'Unable to prepare the PDF for printing.');
-        } finally {
-          autoPrintInProgress = false;
-          resetToStart();
-        }
-      }
-
-      function handleDecodedBarcodeText(rawText, options = {}) {
-        const { errorNode, statusNode, incompleteStatusMessage, beforeShowResult } = options;
-        const data = parseLicenseData(rawText);
-
-        if (!data.fullName || !data.dateOfBirth || !data.street) {
-          if (errorNode) {
-            showMessage(errorNode, INCOMPLETE_DATA_ERROR_MESSAGE);
-          }
-          if (statusNode && incompleteStatusMessage) {
-            statusNode.textContent = incompleteStatusMessage;
-          }
-          return false;
-        }
-
-        if (errorNode) {
-          hideMessage(errorNode);
-        }
-        if (typeof beforeShowResult === 'function') {
-          beforeShowResult();
-        }
-        showDecodedLicenseResult(data);
-        return true;
-      }
-
-      function extractField(rawData, fieldCode) {
-        const escaped = fieldCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const match = rawData.match(new RegExp(`${escaped}([^\\r\\n]+)`));
-        return match ? match[1].trim() : '';
-      }
-
-      function parseAamvaDate(rawDate) {
-        const digits = (rawDate || '').replace(/\D/g, '');
-        if (digits.length !== 8) {
-          return rawDate || '';
-        }
-
-        let year;
-        let month;
-        let day;
-
-        if (Number(digits.slice(0, 4)) > 1900) {
-          year = digits.slice(0, 4);
-          month = digits.slice(4, 6);
-          day = digits.slice(6, 8);
-        } else {
-          month = digits.slice(0, 2);
-          day = digits.slice(2, 4);
-          year = digits.slice(4, 8);
-        }
-
+      function getCurrentLocalDate() {
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const year = String(now.getFullYear());
         return `${month}/${day}/${year}`;
       }
 
@@ -657,11 +515,259 @@
         return age >= 18;
       }
 
-      function getCurrentLocalDate() {
-        const now = new Date();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const year = String(now.getFullYear());
+      // #endregion
+
+      // #region UI Functions
+
+      function showSection(section) {
+        for (const node of [startSection, scanSection, resultSection]) {
+          node.classList.toggle('hidden', node !== section);
+        }
+      }
+
+      function showMessage(node, message) {
+        node.textContent = message;
+        node.classList.remove('hidden');
+      }
+
+      function hideMessage(node) {
+        node.textContent = '';
+        node.classList.add('hidden');
+      }
+
+      function setOptionalFieldsVisible(visible) {
+        optionalFieldsForm.classList.toggle('hidden', !visible);
+        optionalFieldsForm.hidden = !visible;
+        toggleOptionalFieldsButton.setAttribute('aria-expanded', String(visible));
+        toggleOptionalFieldsButton.textContent = visible ? 'Hide optional details' : 'More (Optional Details)…';
+      }
+
+      function resetOptionalFields() {
+        optionalAevl.checked = false;
+        optionalSsn4.value = '';
+        optionalPhone.value = '';
+        optionalEmail.value = '';
+        setOptionalFieldsVisible(false);
+      }
+
+      function stopActiveCameraControls() {
+        if (controls) {
+          controls.stop();
+          controls = null;
+        }
+      }
+
+      function resetHidScanState() {
+        hidScanInput.value = '';
+        hidScanStatus.textContent = '';
+        hidScanSection.classList.add('hidden');
+        hideMessage(hidScanError);
+      }
+
+      function resetToStart() {
+        stopActiveCameraControls();
+        parsedLicenseData = null;
+        showSection(startSection);
+        hideMessage(scanError);
+        hideMessage(printError);
+        hideMessage(ageError);
+        hideMessage(stateError);
+        hideMessage(printStatus);
+        downloadButton.disabled = false;
+        printButton.disabled = false;
+        resetOptionalFields();
+        resetHidScanState();
+        scanStatus.textContent = CAMERA_SCAN_RESET_PROMPT;
+        
+        startHidScan();
+      }
+
+      
+      function startHidScan() {
+        stopActiveCameraControls();
+        parsedLicenseData = null;
+        showSection(startSection);
+        hideMessage(scanError);
+        hideMessage(ageError);
+        hideMessage(stateError);
+        hideMessage(printError);
+        hideMessage(printStatus);
+        downloadButton.disabled = false;
+        printButton.disabled = false;
+        hidScanSection.classList.remove('hidden');
+        hidScanStatus.textContent = '';
+        hidScanInput.value = '';
+        focusHidScanInput();
+      }
+
+
+      function focusHidScanInput() {
+        hidScanInput.focus();
+        hidScanInput.select();
+      }
+
+            function showDecodedLicenseResult(data) {
+        parsedLicenseData = data;
+
+        resultName.textContent = data.fullName;
+        resultDob.textContent = data.dateOfBirth;
+        resultAddress.textContent = data.fullAddress;
+
+        hideMessage(printError);
+        hideMessage(printStatus);
+        hideMessage(ageError);
+        hideMessage(stateError);
+
+        if ((data.state || '').trim().toUpperCase() !== 'AZ') {
+          showMessage(stateError, NON_ARIZONA_ERROR_MESSAGE);
+          downloadButton.disabled = true;
+          printButton.disabled = true;
+        } else if (willBeEighteenByDate(data.dateOfBirth, ELECTION_DATE_2026)) {
+          downloadButton.disabled = false;
+          printButton.disabled = false;
+        } else {
+          showMessage(ageError, UNDERAGE_ERROR_MESSAGE);
+          downloadButton.disabled = true;
+          printButton.disabled = true;
+        }
+
+        showSection(resultSection);
+
+        if (isAutoPrintModeEnabled()) {
+          void maybeAutoPrintAndReset();
+        }
+      }
+
+
+      // #endregion
+
+      // #region Camera Scan Functions
+
+      function isTransientDecodeError(error) {
+        if (!error) {
+          return false;
+        }
+
+        const name = error.name || '';
+        const message = String(error.message || error);
+
+        return (
+          name === 'NotFoundException' ||
+          name === 'ChecksumException' ||
+          name === 'FormatException' ||
+          message.includes('NotFoundException') ||
+          message.includes('No MultiFormat Readers were able to detect the code')
+        );
+      }
+
+
+
+      async function startScan() {
+        stopActiveCameraControls();
+        parsedLicenseData = null;
+        showSection(scanSection);
+        resetHidScanState();
+        hideMessage(scanError);
+        hideMessage(ageError);
+        hideMessage(stateError);
+        downloadButton.disabled = false;
+        printButton.disabled = false;
+        scanStatus.textContent = CAMERA_SCAN_PROMPT;
+
+        try {
+          controls = await codeReader.decodeFromVideoDevice(
+            undefined,
+            video,
+            (result, error, activeControls) => {
+              controls = activeControls;
+
+              if (result && result.getBarcodeFormat() === BarcodeFormat.PDF_417) {
+                if (
+                  handleDecodedBarcodeText(result.getText(), {
+                    errorNode: scanError,
+                    statusNode: scanStatus,
+                    incompleteStatusMessage: 'Decoded data is incomplete. Keep scanning or cancel and retry.',
+                    beforeShowResult: stopActiveCameraControls,
+                  })
+                ) {
+                  return;
+                }
+              } else if (error) {
+                if (isTransientDecodeError(error)) {
+                  hideMessage(scanError);
+                  scanStatus.textContent = 'Scanning… hold still while we decode.';
+                  return;
+                }
+
+                showMessage(scanError, `Scanner error: ${error.message || String(error)}`);
+                scanStatus.textContent = 'Scanner reported an unexpected error. Scanning is still active.';
+              }
+            },
+            {
+              formats: [BarcodeFormat.PDF_417],
+            }
+          );
+        } catch (error) {
+          showMessage(scanError, `Unable to start camera scanning: ${error.message || error}`);
+          scanStatus.textContent = 'Camera unavailable.';
+        }
+      }
+
+      // #endregion
+
+      // #region PDF417 - License Data Parsing Functions
+
+
+      function handleDecodedBarcodeText(rawText, options = {}) {
+        const { errorNode, statusNode, incompleteStatusMessage, beforeShowResult } = options;
+        const data = parseLicenseData(rawText);
+
+        if (!data.fullName || !data.dateOfBirth || !data.street) {
+          if (errorNode) {
+            showMessage(errorNode, INCOMPLETE_DATA_ERROR_MESSAGE);
+          }
+          if (statusNode && incompleteStatusMessage) {
+            statusNode.textContent = incompleteStatusMessage;
+          }
+          return false;
+        }
+
+        if (errorNode) {
+          hideMessage(errorNode);
+        }
+        if (typeof beforeShowResult === 'function') {
+          beforeShowResult();
+        }
+        showDecodedLicenseResult(data);
+        return true;
+      }
+
+      function extractField(rawData, fieldCode) {
+        const escaped = fieldCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = rawData.match(new RegExp(`${escaped}([^\\r\\n]+)`));
+        return match ? match[1].trim() : '';
+      }
+
+      function parseAamvaDate(rawDate) {
+        const digits = (rawDate || '').replace(/\D/g, '');
+        if (digits.length !== 8) {
+          return rawDate || '';
+        }
+
+        let year;
+        let month;
+        let day;
+
+        if (Number(digits.slice(0, 4)) > 1900) {
+          year = digits.slice(0, 4);
+          month = digits.slice(4, 6);
+          day = digits.slice(6, 8);
+        } else {
+          month = digits.slice(0, 2);
+          day = digits.slice(2, 4);
+          year = digits.slice(4, 8);
+        }
+
         return `${month}/${day}/${year}`;
       }
 
@@ -715,17 +821,65 @@
         };
       }
 
-      function normalizeFieldName(name) {
-        return name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      }
-
-      function setIfTextField(field, value) {
-        if (!value || typeof field.setText !== 'function') {
-          return false;
+      hidScanInput.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          hidScanInput.value += '\r';
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
         }
 
-        field.setText(value);
-        return true;
+        if (event.key !== 'Enter' && event.key !== 'Tab' && event.key !== 'NumpadEnter' && event.key !== 'ArrowDown') {
+          return;
+        }
+
+        event.preventDefault();
+        const rawText = hidScanInput.value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+        hidScanInput.value = '';
+
+        if (!rawText) {
+          focusHidScanInput();
+          return;
+        }
+
+        if (
+          !handleDecodedBarcodeText(rawText, {
+            errorNode: hidScanError,
+            statusNode: hidScanStatus,
+            incompleteStatusMessage: HID_INCOMPLETE_STATUS_MESSAGE,
+          })
+        ) {
+          focusHidScanInput();
+        }
+      });
+      toggleOptionalFieldsButton.addEventListener('click', () => {
+        setOptionalFieldsVisible(optionalFieldsForm.hidden);
+      });
+
+      // #endregion
+
+      startScanButton.addEventListener('click', startScan);
+      cancelScanButton.addEventListener('click', resetToStart);
+
+      cancelResultButton.addEventListener('click', resetToStart);
+      hidScanSection.addEventListener('click', focusHidScanInput);
+
+      startHidScan();   // BUGBUG Start Hid Scan ALWAYS...
+
+      optionalSsn4.addEventListener('input', () => {
+        optionalSsn4.value = optionalSsn4.value.replace(/\D/g, '').slice(0, 4);
+      });
+
+      // #region PDF Support.
+
+      function getOptionalRegistrationData() {
+         return {
+           aevl: optionalAevl.checked,
+           ssnLastFour: optionalSsn4.value.replace(/\D/g, '').slice(0, 4),
+           telephone: formatPhoneNumber(optionalPhone.value),
+           email: optionalEmail.value.trim(),
+        };
       }
 
       function setCheckboxFieldValue(field, checked) {
@@ -742,62 +896,23 @@
         return false;
       }
 
-
       function matchesAnyFieldName(normalized, variants) {
         return variants.some((variant) =>
           variant instanceof RegExp ? variant.test(normalized) : normalized.includes(variant)
         );
       }
 
-      function getOptionalRegistrationData() {
-         return {
-           aevl: optionalAevl.checked,
-           ssnLastFour: optionalSsn4.value.replace(/\D/g, '').slice(0, 4),
-           telephone: formatPhoneNumber(optionalPhone.value),
-           email: optionalEmail.value.trim(),
-        };
-      }
-
-      function isValidUsPhoneDigits(digits) {
-        return /^\d{10}$/.test(digits);
-      }
-
-      function formatPhoneNumber(rawPhone) {
-        const digits = (rawPhone || '').replace(/\D/g, '');
-        if (!digits) {
-          return '';
-        }
-        // Allow an optional leading "1" country code.
-        const tenDigits = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
-        if (!isValidUsPhoneDigits(tenDigits)) {
-          return rawPhone.trim();
-        }
-        return `${tenDigits.slice(0, 3)}-${tenDigits.slice(3, 6)}-${tenDigits.slice(6)}`;
-      }
-
-      function isValidEmail(rawEmail) {
-        const value = (rawEmail || '').trim();
-        if (!value) {
-          return true; // optional field, empty is fine
-        }
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-      }
-
-      function isTransientDecodeError(error) {
-        if (!error) {
+      function setIfTextField(field, value) {
+        if (!value || typeof field.setText !== 'function') {
           return false;
         }
 
-        const name = error.name || '';
-        const message = String(error.message || error);
+        field.setText(value);
+        return true;
+      }
 
-        return (
-          name === 'NotFoundException' ||
-          name === 'ChecksumException' ||
-          name === 'FormatException' ||
-          message.includes('NotFoundException') ||
-          message.includes('No MultiFormat Readers were able to detect the code')
-        );
+      function normalizeFieldName(name) {
+        return name.toLowerCase().replace(/[^a-z0-9]/g, '');
       }
 
       function fillPdfFormFields(form, parsed) {
@@ -925,14 +1040,6 @@
         }
       }
 
-      function sanitizeFileNamePart(value) {
-        return (value || '')
-          .replace(/[^a-zA-Z0-9._-]+/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-|-$/g, '')
-          .slice(0, 40);
-      }
-
       function drawYellowHighlight(page, rectangle) {
         page.drawRectangle({
           x: rectangle.x,
@@ -944,6 +1051,21 @@
         });
       }
 
+      function buildRegistrationFileName(parsed) {
+        const safeFirstName = sanitizeFileNamePart(parsed.firstName);
+        const safeLastName = sanitizeFileNamePart(parsed.lastName);
+        return [
+          'AZ-Voter-Registration',
+          safeFirstName || 'Applicant',
+          safeLastName || 'Name',
+        ].filter(Boolean).join('-');
+      }
+
+      function highlightPromptText(page, promptHighlights = BOX_PROMPT_HIGHLIGHTS) {
+        for (const highlight of promptHighlights) {
+          drawYellowHighlight(page, highlight);
+        }
+      }
 
       function getPromptHighlights(parsed) {
         const highlights = [...BOX_PROMPT_HIGHLIGHTS];
@@ -963,12 +1085,6 @@
         }
 
         return highlights;
-      }
-
-      function highlightPromptText(page, promptHighlights = BOX_PROMPT_HIGHLIGHTS) {
-        for (const highlight of promptHighlights) {
-          drawYellowHighlight(page, highlight);
-        }
       }
 
       async function generateRegistrationPdfBlob(parsed) {
@@ -1012,14 +1128,41 @@
         return new Blob([outputBytes], { type: 'application/pdf' });
       }
 
-      function buildRegistrationFileName(parsed) {
-        const safeFirstName = sanitizeFileNamePart(parsed.firstName);
-        const safeLastName = sanitizeFileNamePart(parsed.lastName);
-        return [
-          'AZ-Voter-Registration',
-          safeFirstName || 'Applicant',
-          safeLastName || 'Name',
-        ].filter(Boolean).join('-');
+
+      // #endregion
+
+      // #region Download and Print
+
+      async function maybeAutoPrintAndReset() {
+        if (autoPrintInProgress || !parsedLicenseData) {
+          return;
+        }
+
+        if ((parsedLicenseData.state || '').trim().toUpperCase() !== 'AZ') {
+          return;
+        }
+
+        if (!willBeEighteenByDate(parsedLicenseData.dateOfBirth, ELECTION_DATE_2026)) {
+          return;
+        }
+
+        autoPrintInProgress = true;
+        downloadButton.disabled = true;
+        printButton.disabled = true;
+        hideMessage(printError);
+        showMessage(printStatus, 'Auto-print mode enabled. Opening print dialog...');
+
+        try {
+          await printRegistrationPdf({
+            ...parsedLicenseData,
+            ...getOptionalRegistrationData(),
+          });
+        } catch (error) {
+          showMessage(printError, error.message || 'Unable to prepare the PDF for printing.');
+        } finally {
+          autoPrintInProgress = false;
+          resetToStart();
+        }
       }
 
       async function downloadLastPage(parsed) {
@@ -1121,109 +1264,6 @@
         });
       }
 
-      async function startScan() {
-        stopActiveCameraControls();
-        parsedLicenseData = null;
-        showSection(scanSection);
-        resetHidScanState();
-        hideMessage(scanError);
-        hideMessage(ageError);
-        hideMessage(stateError);
-        downloadButton.disabled = false;
-        printButton.disabled = false;
-        scanStatus.textContent = CAMERA_SCAN_PROMPT;
-
-        try {
-          controls = await codeReader.decodeFromVideoDevice(
-            undefined,
-            video,
-            (result, error, activeControls) => {
-              controls = activeControls;
-
-              if (result && result.getBarcodeFormat() === BarcodeFormat.PDF_417) {
-                if (
-                  handleDecodedBarcodeText(result.getText(), {
-                    errorNode: scanError,
-                    statusNode: scanStatus,
-                    incompleteStatusMessage: 'Decoded data is incomplete. Keep scanning or cancel and retry.',
-                    beforeShowResult: stopActiveCameraControls,
-                  })
-                ) {
-                  return;
-                }
-              } else if (error) {
-                if (isTransientDecodeError(error)) {
-                  hideMessage(scanError);
-                  scanStatus.textContent = 'Scanning… hold still while we decode.';
-                  return;
-                }
-
-                showMessage(scanError, `Scanner error: ${error.message || String(error)}`);
-                scanStatus.textContent = 'Scanner reported an unexpected error. Scanning is still active.';
-              }
-            },
-            {
-              formats: [BarcodeFormat.PDF_417],
-            }
-          );
-        } catch (error) {
-          showMessage(scanError, `Unable to start camera scanning: ${error.message || error}`);
-          scanStatus.textContent = 'Camera unavailable.';
-        }
-      }
-
-      function startHidScan() {
-        stopActiveCameraControls();
-        parsedLicenseData = null;
-        showSection(hidScanSection);
-        hideMessage(scanError);
-        hideMessage(ageError);
-        hideMessage(stateError);
-        hideMessage(printError);
-        hideMessage(printStatus);
-        downloadButton.disabled = false;
-        printButton.disabled = false;
-        resetHidScanState();
-        focusHidScanInput();
-      }
-
-      startScanButton.addEventListener('click', startScan);
-      startHidScanButton.addEventListener('click', startHidScan);
-      cancelScanButton.addEventListener('click', resetToStart);
-      cancelHidScanButton.addEventListener('click', resetToStart);
-      cancelResultButton.addEventListener('click', resetToStart);
-      hidScanSection.addEventListener('click', focusHidScanInput);
-      hidScanInput.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== 'Tab') {
-          return;
-        }
-
-        event.preventDefault();
-        const rawText = hidScanInput.value.trim();
-        hidScanInput.value = '';
-
-        if (!rawText) {
-          focusHidScanInput();
-          return;
-        }
-
-        if (
-          !handleDecodedBarcodeText(rawText, {
-            errorNode: hidScanError,
-            statusNode: hidScanStatus,
-            incompleteStatusMessage: HID_INCOMPLETE_STATUS_MESSAGE,
-          })
-        ) {
-          focusHidScanInput();
-        }
-      });
-      toggleOptionalFieldsButton.addEventListener('click', () => {
-        setOptionalFieldsVisible(optionalFieldsForm.hidden);
-      });
-      optionalSsn4.addEventListener('input', () => {
-        optionalSsn4.value = optionalSsn4.value.replace(/\D/g, '').slice(0, 4);
-      });
-
       downloadButton.addEventListener('click', async () => {
         if (!parsedLicenseData) {
           showMessage(printError, 'Nothing to download. Please scan a license first.');
@@ -1281,6 +1321,9 @@
           printButton.disabled = false;
         }
       });
+
+      // #endregion 
+
     </script>
   </body>
 </html>
