@@ -10,17 +10,17 @@ Website is live at:
 1. Scans the PDF417 barcode on the back of a Driver License.
    1. Hard Coded for Arizona.
    2. Can use a cheap 2D Barcode Scanner or can use Camera.
-2. Writes data to Arizona Voter Registration Page.
-   1. Performs basic checks like Date of Birth and State.
-   2. Auto Highlights required Fields.
-3. User can then Print or Download as PDF file.
+2. Injects collected data to official Arizona Sec. of State **Voter Registration PDF** form.
+   1. Performs basic checks before filling out. Must be 18. Must be AZ Resident.
+   2. Auto Highlights remaining fields to be filled in.
+3. Can then Print or Download as PDF file.
 4. Usage Scenarios:
    1. Can be run in Kiosk Mode ( mode=autoprint ) on Windows Machine.</br>
    Use Barcode Reader, app will parse then automatically print to default printer.
-   2. Can be run on Smart Phone. </br>
+   2. Can be run on a Kiosk Tablet. </br>
    User can input extra fields like E-Mail, Phone, Last4SSN, then print.
-   3. Can be run on ANY Smart Phone. (After being directed by QR Code)</br>
-   User can input all fields on their personal Smart Phone, and submit themselves
+   3. Can be run on ANY Smart Phone. (As directed by QR Code)</br>
+   User can input all fields on their personal Smart Phone, and submit themselves.
 
 ## Future:
 
